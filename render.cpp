@@ -26,6 +26,7 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include <math_neon.h>
 #include "utility.h"
 
+
 float inverseSampleRate;
 float phase = 0;
 
@@ -40,7 +41,7 @@ Scope scope;
 int inputPointer = 0;
 // float fadingOutputPointer = 0;
 double outputPointer = 0;
-float outputPointerSpeed = 0.6f;
+double outputPointerSpeed = 0.6f;
 float ringBuffer[RINGBUFFER_SIZE];
 float lowPassedRingBuffer[RINGBUFFER_SIZE];
 
@@ -205,13 +206,13 @@ void render(BelaContext *context, void *userData)
     // Create sine wave
     phase += 2.0 * M_PI * frequency * inverseSampleRate;
     // float sample = phase;
-    float sample = sinf_neon(phase);
-    in_l = 0.2f * sample;
+    float sample = sin(phase);
+    in_l = 0.1f * sample;
 
 		if(phase > M_PI)
 			phase -= 2.0 * M_PI;
 
-    frequency += 0.001;
+    frequency += 0.0001;
     if(frequency > 500.0)
       frequency=200.0;
 
