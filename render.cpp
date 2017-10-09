@@ -45,8 +45,8 @@ double outputPointerSpeed = 0.6f;
 float ringBuffer[RINGBUFFER_SIZE];
 float lowPassedRingBuffer[RINGBUFFER_SIZE];
 
-const int sincLength = 10;
-const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sinclength on both sides of the affected sample. the +1 is for the middle sample
+const int sincLength = 30;
+const int sincLengthBothSides = (sincLength * 2); //We want to use sinclength on both sides of the affected sample. the +1 is for the middle sample
 float blackmanWindow[sincLengthBothSides];
 float crossfadeValue = 0;
 int previousJumpDistance = 0;
