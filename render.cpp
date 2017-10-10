@@ -18,14 +18,13 @@ http://www.eecs.qmul.ac.uk/~andrewm
 	Giulio Moro, Laurel Pardue, Victor Zappi. All rights reserved.
 
 The Bela software is distributed under the GNU Lesser General Public License
-(LGPL 3.0), available here: https://www.gnu.org/licenses/lgpl-3.0.txt
+(LGPL 3.0), available    here: https://www.gnu.org/licenses/lgpl-3.0.txt
 */
 #include <Bela.h>
 #include <Scope.h>
 #include <cmath>
 #include <math_neon.h>
 #include "utility.h"
-
 
 float inverseSampleRate;
 float phase = 0;
@@ -41,12 +40,12 @@ Scope scope;
 int inputPointer = 0;
 // float fadingOutputPointer = 0;
 double outputPointer = 0;
-double outputPointerSpeed = 0.6f;
+double outputPointerSpeed = 0.8f;
 float ringBuffer[RINGBUFFER_SIZE];
 float lowPassedRingBuffer[RINGBUFFER_SIZE];
 
-const int sincLength = 10;
-const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sinclength on both sides of the affected sample. the +1 is for the middle sample
+const int sincLength = 6;
+const int sincLengthBothSides = (sincLength * 2); //We want to use sinclength on both sides of the affected sample.
 float blackmanWindow[sincLengthBothSides];
 float crossfadeValue = 0;
 int previousJumpDistance = 0;
@@ -77,8 +76,12 @@ inline double normalizedSinc(double x){
 
 void initializeBlackmanWindow(){
   for (size_t x = 0; x < sincLengthBothSides; x++) {
-    blackmanWindow[x] = 0.43 - 0.5 * cos(2 * M_PI * x/(sincLength * 2)) + 0.08 * cos(4 * M_PI * x/(sincLength*2));
+    blackmanWindow[x] = 0.42 - 0.5 * cos(2 * M_PI * x / (sincLengthBothSides - 1)) + 0.08 * cos(4 * M_PI * x / (sincLengthBothSides-1));
   }
+}
+
+float getBlackman(float x, float M){
+  return 0.42 - 0.5 * cosf_neon(2 * M_PI * x / M) + 0.08 * cosf_neon(4 * M_PI * x / M);
 }
 
 bool setup(BelaContext *context, void *userData)
@@ -113,7 +116,8 @@ inline float interpolate(double index){
 		// if(currentSampleIndex < 0){
 		// 	currentSampleIndex += RINGBUFFER_SIZE;
 		// }
-    xValues[i] = (i- sincLength - fractional) * M_PI;
+    xValues[i] = (i - sincLength - fractional) * M_PI;
+    blackmanWindow[i] = getBlackman(i + 1 - fractional, sincLengthBothSides+1);
     // xValues[i] *= M_PI;
   }
 
@@ -123,8 +127,8 @@ inline float interpolate(double index){
     currentSampleIndex = wrapBufferSample(currentSampleIndex);
     fadingSampleIndex = wrapBufferSample(fadingSampleIndex);
 
-    xValues[i] == 0? sincValues[i] = 1.0f : sincValues[i] /= xValues[i];
-		combinedSamples += sincValues[i] * ((1.0f - crossfadeValue) * ringBuffer[currentSampleIndex] + crossfadeValue * ringBuffer[fadingSampleIndex]);// * blackmanWindow[i];
+    xValues[i] == 0 ? sincValues[i] = 1.0f : (sincValues[i] /= xValues[i]) *= blackmanWindow[i];
+		combinedSamples += sincValues[i] * ((1.0f - crossfadeValue) * ringBuffer[currentSampleIndex] + crossfadeValue * ringBuffer[fadingSampleIndex]);
 
 		currentSampleIndex++;
     fadingSampleIndex++;
@@ -201,27 +205,41 @@ void render(BelaContext *context, void *userData)
 {
 	for(unsigned int n = 0; n < context->audioFrames; n++) {
     //read input
-    // in_l = audioRead(context, n, 0);
+    in_l = audioRead(context, n, 0);
 
     // Create sine wave
-    phase += 2.0 * M_PI * frequency * inverseSampleRate;
-    // float sample = phase;
-    float sample = sin(phase);
-    in_l = 0.1f * sample;
-
-		if(phase > M_PI)
-			phase -= 2.0 * M_PI;
-
-    frequency += 0.0001;
-    if(frequency > 500.0)
-      frequency=200.0;
+    // phase += 2.0 * M_PI * frequency * inverseSampleRate;
+    // // float sample = phase;
+    // float sample = sin(phase);
+    // in_l = 0.1f * sample;
+    //
+		// if(phase > M_PI)
+		// 	phase -= 2.0 * M_PI;
+    //
+    // // frequency += 0.0001;
+    // if(frequency > 500.0)
+    //   frequency=200.0;
 
 		ringBuffer[inputPointer] = in_l;
+
+    //test with moving pitch shift
+    outputPointerSpeed -= 0.000001;
+    if(outputPointerSpeed < 0.25){
+      outputPointerSpeed = 1.0f;
+    }
+
 
 		// float lowPassedSample = 0.2f * ringBuffer[inputPointer] + 0.8f * lowPassedRingBuffer[wrapBufferSample(inputPointer-1)] + 0.0f * lowPassedRingBuffer[wrapBufferSample(inputPointer -2)];
 		// lowPassedRingBuffer[inputPointer] = lowPassedSample;
 
-		out_l = interpolate(outputPointer);
+    // if(fmodf_neon(outputPointer, sincLengthBothSides*2) < outputPointerSpeed){
+      out_l = interpolate(outputPointer);
+    // }
+
+    // if(n < sincLengthBothSides){
+    //   scope.log(in_l, out_l, blackmanWindow[n], sincValues[n]);//, lowPassedRingBuffer[inputPointer]);
+    // }
+
     // out_l = in_l;
     // int flooredOutputPointer;
     // modf_neon(outputPointer, &flooredOutputPointer);
@@ -276,7 +294,7 @@ void render(BelaContext *context, void *userData)
     // if(inputPointer%sincLengthBothSides == 0){
     //   jumpPulse = 0.2f;
     // }
-    scope.log(in_l, out_l, outputPointerLocation, crossfadeValue);//, lowPassedRingBuffer[inputPointer]);
+    // scope.log(in_l, out_l, outputPointerLocation, inputPointerLocation);//, lowPassedRingBuffer[inputPointer]);
 
 	}
 	// rt_printf("pointerIndices: %i, %i\n", inputPointer, (int)outputPointer);
