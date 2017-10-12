@@ -36,21 +36,21 @@ float phase = 0;
 
 Scope scope;
 
-#define LOWESTNOTEPERIOD 300 //300 CORRESPONDS TO pitch of 137 Hz if samplerate is 44.1 kHz
+#define LOWESTNOTEPERIOD 424 //300 CORRESPONDS TO pitch of 147 Hz if samplerate is 44.1 kHz
 #define HIGHESTNOTEPERIOD 50 //100 CORRESPONDS TO pitch of 441 Hz if samplerate is 44.1 kHz
-#define RINGBUFFER_SIZE LOWESTNOTEPERIOD * 4
+#define RINGBUFFER_SIZE LOWESTNOTEPERIOD * 10
 int inputPointer = 0;
 // float fadingOutputPointer = 0;
 double outputPointer = 0;
-double outputPointerSpeed = 0.8f;
+double outputPointerSpeed = 0.5f;
 float ringBuffer[RINGBUFFER_SIZE];
 float lowPassedRingBuffer[RINGBUFFER_SIZE];
 
 
 //Interpolation stuff!
-const int sincTableScaleFactor = 1000;
+const int sincTableScaleFactor = 10000;
 const int sincLength = 5;
-const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sinclength on both sides of the affected sample.
+const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sincLength on both sides of the affected sample.
 const int windowedSincTableSize = sincLengthBothSides * sincTableScaleFactor;
 float blackmanWindow[sincLengthBothSides];
 
@@ -103,7 +103,7 @@ void initializeWindowedSincTable(){
   }
 }
 
-// How does it look with a sinclength of 6? sincLengthBothSides is 13
+// How does it look with a sincLength of 6? sincLengthBothSides is 13
 //                         x
 //   *   *   *   *   *   *   *   *   *   *   *   *
 // |   |   |   |   |   |   |   |   |   |   |   |   |
@@ -122,6 +122,9 @@ float interpolateFromTable(float index){
   float combinedSamples = 0;
   float sincValue;
   int x;
+  assert(windowedSincTable[0] < 0.000001f);
+  assert(windowedSincTable[(sincLengthBothSides-1)*sincTableScaleFactor] < 0.000001f);
+  assert(windowedSincTable[sincLength*sincTableScaleFactor] == 1.0f);
 
 	for (int i = 1; i < sincLengthBothSides; i++) {
     currentSampleIndex = wrapBufferSample(currentSampleIndex);
@@ -132,79 +135,19 @@ float interpolateFromTable(float index){
     combinedSamples += sincValue * ringBuffer[currentSampleIndex];
     currentSampleIndex++;
     // fadingSampleIndex++;
-}
-
-  // for (int i = 0; i < sincLengthBothSides; i++) {
-  //
-  //   xValues[i] == 0 ? sincValues[i] = 1.0f : (sincValues[i] /= xValues[i]) *= blackmanWindow[i];
-	// 	combinedSamples += sincValues[i] * ((1.0f - crossfadeValue) * ringBuffer[currentSampleIndex] + crossfadeValue * ringBuffer[fadingSampleIndex]);
-  // }
-
-	return combinedSamples;
-}
-
-void initializeBlackmanWindow(){
-  for (size_t x = 0; x < sincLengthBothSides; x++) {
-    blackmanWindow[x] = 0.42 - 0.5 * cos(2 * M_PI * x / (sincLengthBothSides - 1)) + 0.08 * cos(4 * M_PI * x / (sincLengthBothSides-1));
   }
+	return combinedSamples;
 }
 
 bool setup(BelaContext *context, void *userData)
 {
 	scope.setup(5, context->audioSampleRate);
 	inverseSampleRate = 1.0 / context->audioSampleRate;
-	// longestTrackablePeriod = context->audioSampleRate / lowestTrackableFrequency;
-  // initializeBlackmanWindow();
   initializeWindowedSincTable();
 	return true;
 }
 
-
-// TODO: Make this function moar optimized!
-// TODO: Make my own sincfv function that is basically an edited version of sinfv_neon
-float xValues[sincLengthBothSides];
-float sincValues[sincLengthBothSides];
-float combinedSamples;
-double fractional;
-int currentSampleIndex;
-inline float interpolate(double index){
-	//First calculate the fractional so we know where to shift the sinc function.
-  // currentSampleIndex;
-  // fractional = modf_neon(index, &currentSampleIndex);
-  double integral;
-  fractional = modf(index, &integral);
-  currentSampleIndex = (int)integral - sincLength;
-  int fadingSampleIndex = currentSampleIndex - previousJumpDistance;
-
-  combinedSamples = 0;
-
-	for (int i = 0; i < sincLengthBothSides; i++) {
-		// if(currentSampleIndex < 0){
-		// 	currentSampleIndex += RINGBUFFER_SIZE;
-		// }
-    xValues[i] = (i - sincLength - fractional) * M_PI;
-    blackmanWindow[i] = getBlackman(i + 1 - fractional, sincLengthBothSides+1);
-    // xValues[i] *= M_PI;
-  }
-
-  sinfv_neon(xValues, sincLengthBothSides, sincValues);
-
-  for (int i = 0; i < sincLengthBothSides; i++) {
-    currentSampleIndex = wrapBufferSample(currentSampleIndex);
-    fadingSampleIndex = wrapBufferSample(fadingSampleIndex);
-
-    xValues[i] == 0 ? sincValues[i] = 1.0f : (sincValues[i] /= xValues[i]) *= blackmanWindow[i];
-		combinedSamples += sincValues[i] * ((1.0f - crossfadeValue) * ringBuffer[currentSampleIndex] + crossfadeValue * ringBuffer[fadingSampleIndex]);
-
-		currentSampleIndex++;
-    fadingSampleIndex++;
-  }
-
-	return combinedSamples;
-}
-
 const float amdf_C = 3.0/8.0;
-// const int dMax = LOWESTNOTEPERIOD * 2;
 const int correlationWindowSize = LOWESTNOTEPERIOD * amdf_C;
 const int searchWindowSize = LOWESTNOTEPERIOD - correlationWindowSize;
 
@@ -240,7 +183,7 @@ bool amdf (){
   // int searchIndexStop = searchIndexStart + searchWindowSize;
   // for (int currentSearchIndex = searchIndexStart; currentSearchIndex < searchIndexStop; ++currentSearchIndex) {
     magSum = 0;
-    for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; ++currentCompareIndex, ++i) {
+    for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex+=2, i+=2) {
       int k = wrapBufferSample(currentCompareIndex);
       int km = wrapBufferSample(currentSearchIndex + i);
   		magSum += fabsf_neon(ringBuffer[km] - ringBuffer[k]);
@@ -274,23 +217,23 @@ void render(BelaContext *context, void *userData)
     //read input
     in_l = audioRead(context, n, 0);
 
-    // Create sine wave
-    phase += 2.0 * M_PI * frequency * inverseSampleRate;
-    // float sample = phase;
-    float sample = sin(phase);
-    in_l = 0.1f * sample;
-
-		if(phase > M_PI)
-			phase -= 2.0 * M_PI;
-
-    frequency += 0.0001;
-    if(frequency > 500.0)
-      frequency=200.0;
+    // // Create sine wave
+    // phase += 2.0 * M_PI * frequency * inverseSampleRate;
+    // // float sample = phase;
+    // float sample = sin(phase);
+    // in_l = 0.1f * sample;
+    //
+		// if(phase > M_PI)
+		// 	phase -= 2.0 * M_PI;
+    //
+    // // frequency += 0.0001;
+    // if(frequency > 500.0)
+    //   frequency=200.0;
 
 		ringBuffer[inputPointer] = in_l;
 
     //test with moving pitch shift
-    outputPointerSpeed -= 0.000001;
+    // outputPointerSpeed -= 0.000001;
     if(outputPointerSpeed < 0.25){
       outputPointerSpeed = 1.0f;
     }
@@ -335,25 +278,25 @@ void render(BelaContext *context, void *userData)
     crossfadeValue -= 0.01;
     crossfadeValue = max(crossfadeValue, 0.0f);
 
-    // if (!amdfIsDone) {
-    //   if(amdf()){
-    //     // rt_printf("amdf was done. Best length: %i\n", bestSoFarIndexJump);
-    //     previousJumpDistance = bestSoFarIndexJump;
-    //     outputPointer = wrapBufferSample(outputPointer + bestSoFarIndexJump);
-    //     // int skipDistance = wrapBufferSample(newOutputPointer - outputPointer);
-    //     // rt_printf("skip distance: %i\n", skipDistance);
-    //     // outputPointer = newOutputPointer;
-    //     // scope.trigger();
-    //     jumpPulse = 0.5f;
-    //     crossfadeValue = 1.0f;
-    //   }
-    // }
-    // int distanceBetweenInOut = wrapBufferSample(inputPointer - outputPointer);
-    // float proportionalDistance = ((float)distanceBetweenInOut) / ((float) RINGBUFFER_SIZE);
-    // if(amdfIsDone && distanceBetweenInOut > RINGBUFFER_SIZE/4){
-    //   initiateAMDF();
-    //   // jumpPulse = 1.0;
-    // }
+    if (!amdfIsDone) {
+      if(amdf()){
+        // rt_printf("amdf was done. Best length: %i\n", bestSoFarIndexJump);
+        previousJumpDistance = bestSoFarIndexJump;
+        outputPointer = wrapBufferSample(outputPointer + bestSoFarIndexJump);
+        // int skipDistance = wrapBufferSample(newOutputPointer - outputPointer);
+        // rt_printf("skip distance: %i\n", skipDistance);
+        // outputPointer = newOutputPointer;
+        // scope.trigger();
+        jumpPulse = 0.5f;
+        crossfadeValue = 1.0f;
+      }
+    }
+    int distanceBetweenInOut = wrapBufferSample(inputPointer - outputPointer);
+    float proportionalDistance = ((float)distanceBetweenInOut) / ((float) RINGBUFFER_SIZE);
+    if(amdfIsDone && distanceBetweenInOut > RINGBUFFER_SIZE/4){
+      initiateAMDF();
+      // jumpPulse = 1.0;
+    }
 
     float outputPointerLocation = ((float)outputPointer) / ((float) RINGBUFFER_SIZE);
     float inputPointerLocation = ((float)inputPointer) / ((float) RINGBUFFER_SIZE);
