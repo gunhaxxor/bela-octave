@@ -25,6 +25,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include <cmath>
 #include <math_neon.h>
 #include "utility.h"
+#undef NDEBUG
+#include <assert.h>
 
 float inverseSampleRate;
 float phase = 0;
@@ -36,7 +38,7 @@ Scope scope;
 
 #define LOWESTNOTEPERIOD 300 //300 CORRESPONDS TO pitch of 137 Hz if samplerate is 44.1 kHz
 #define HIGHESTNOTEPERIOD 50 //100 CORRESPONDS TO pitch of 441 Hz if samplerate is 44.1 kHz
-#define RINGBUFFER_SIZE LOWESTNOTEPERIOD * 4 *8
+#define RINGBUFFER_SIZE LOWESTNOTEPERIOD * 4
 int inputPointer = 0;
 // float fadingOutputPointer = 0;
 double outputPointer = 0;
@@ -44,9 +46,18 @@ double outputPointerSpeed = 0.8f;
 float ringBuffer[RINGBUFFER_SIZE];
 float lowPassedRingBuffer[RINGBUFFER_SIZE];
 
-const int sincLength = 6;
-const int sincLengthBothSides = (sincLength * 2); //We want to use sinclength on both sides of the affected sample.
+
+//Interpolation stuff!
+const int sincTableScaleFactor = 1000;
+const int sincLength = 5;
+const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sinclength on both sides of the affected sample.
+const int windowedSincTableSize = sincLengthBothSides * sincTableScaleFactor;
 float blackmanWindow[sincLengthBothSides];
+
+float windowedSincTable[windowedSincTableSize];
+float windowedSincTableDifferences[windowedSincTableSize];
+
+//Amdf stuff
 float crossfadeValue = 0;
 int previousJumpDistance = 0;
 
@@ -71,7 +82,65 @@ inline double normalizedSinc(double x){
 	if(x == 0){
 		return 1.0;
 	}
-  return sinf_neon(x)/x;
+  return sin(x)/x;
+  // return sinf_neon(x)/x;
+}
+
+float getBlackman(float x, float M){
+  return 0.42 - 0.5 * cos(2 * M_PI * x / M) + 0.08 * cos(4 * M_PI * x / M);
+}
+
+void initializeWindowedSincTable(){
+  float previousY = 0;
+  for (size_t i = 0; i < sizeof(windowedSincTable)/sizeof(windowedSincTable[0]); i++) {
+    float xSinc = ((float) i)/sincTableScaleFactor - sincLength;
+    float xBlackman = ((float) i)/sincTableScaleFactor;
+    float y = normalizedSinc(xSinc);
+    y *= getBlackman(xBlackman, sincLengthBothSides-1);
+    windowedSincTable[i] = y;
+    windowedSincTableDifferences[i] = y - previousY;
+    previousY = y;
+  }
+}
+
+// How does it look with a sinclength of 6? sincLengthBothSides is 13
+//                         x
+//   *   *   *   *   *   *   *   *   *   *   *   *
+// |   |   |   |   |   |   |   |   |   |   |   |   |
+// 0   1   2   3   4   5   6   7   8   9   10  11  12
+//-6  -5  -4  -3  -2  -1   0   1   2   3   4   5   6
+float interpolateFromTable(float index){
+  // First calculate the fractional so we know where to shift the sinc function.
+  int integral;
+  float fractional = modf_neon(index, &integral);
+  int scaledFractional;
+  float indexRatio = modf_neon(fractional*sincTableScaleFactor, &scaledFractional);
+
+  int currentSampleIndex = (int)integral - sincLength;
+  // int fadingSampleIndex = currentSampleIndex - previousJumpDistance;
+
+  float combinedSamples = 0;
+  float sincValue;
+  int x;
+
+	for (int i = 1; i < sincLengthBothSides; i++) {
+    currentSampleIndex = wrapBufferSample(currentSampleIndex);
+    // fadingSampleIndex = wrapBufferSample(fadingSampleIndex);
+
+    x = i*sincTableScaleFactor - (int)scaledFractional;
+    sincValue = windowedSincTable[x] + windowedSincTableDifferences[x+1] * indexRatio;
+    combinedSamples += sincValue * ringBuffer[currentSampleIndex];
+    currentSampleIndex++;
+    // fadingSampleIndex++;
+}
+
+  // for (int i = 0; i < sincLengthBothSides; i++) {
+  //
+  //   xValues[i] == 0 ? sincValues[i] = 1.0f : (sincValues[i] /= xValues[i]) *= blackmanWindow[i];
+	// 	combinedSamples += sincValues[i] * ((1.0f - crossfadeValue) * ringBuffer[currentSampleIndex] + crossfadeValue * ringBuffer[fadingSampleIndex]);
+  // }
+
+	return combinedSamples;
 }
 
 void initializeBlackmanWindow(){
@@ -80,16 +149,13 @@ void initializeBlackmanWindow(){
   }
 }
 
-float getBlackman(float x, float M){
-  return 0.42 - 0.5 * cosf_neon(2 * M_PI * x / M) + 0.08 * cosf_neon(4 * M_PI * x / M);
-}
-
 bool setup(BelaContext *context, void *userData)
 {
 	scope.setup(5, context->audioSampleRate);
 	inverseSampleRate = 1.0 / context->audioSampleRate;
 	// longestTrackablePeriod = context->audioSampleRate / lowestTrackableFrequency;
-  initializeBlackmanWindow();
+  // initializeBlackmanWindow();
+  initializeWindowedSincTable();
 	return true;
 }
 
@@ -199,6 +265,7 @@ bool amdf (){
   // return bestSoFarIndex;
 }
 
+int tableIndex = 0;
 float frequency = 330;
 float jumpPulse = 0;
 void render(BelaContext *context, void *userData)
@@ -208,17 +275,17 @@ void render(BelaContext *context, void *userData)
     in_l = audioRead(context, n, 0);
 
     // Create sine wave
-    // phase += 2.0 * M_PI * frequency * inverseSampleRate;
-    // // float sample = phase;
-    // float sample = sin(phase);
-    // in_l = 0.1f * sample;
-    //
-		// if(phase > M_PI)
-		// 	phase -= 2.0 * M_PI;
-    //
-    // // frequency += 0.0001;
-    // if(frequency > 500.0)
-    //   frequency=200.0;
+    phase += 2.0 * M_PI * frequency * inverseSampleRate;
+    // float sample = phase;
+    float sample = sin(phase);
+    in_l = 0.1f * sample;
+
+		if(phase > M_PI)
+			phase -= 2.0 * M_PI;
+
+    frequency += 0.0001;
+    if(frequency > 500.0)
+      frequency=200.0;
 
 		ringBuffer[inputPointer] = in_l;
 
@@ -233,7 +300,7 @@ void render(BelaContext *context, void *userData)
 		// lowPassedRingBuffer[inputPointer] = lowPassedSample;
 
     // if(fmodf_neon(outputPointer, sincLengthBothSides*2) < outputPointerSpeed){
-      out_l = interpolate(outputPointer);
+      out_l = interpolateFromTable(outputPointer);
     // }
 
     // if(n < sincLengthBothSides){
@@ -294,7 +361,12 @@ void render(BelaContext *context, void *userData)
     // if(inputPointer%sincLengthBothSides == 0){
     //   jumpPulse = 0.2f;
     // }
-    // scope.log(in_l, out_l, outputPointerLocation, inputPointerLocation);//, lowPassedRingBuffer[inputPointer]);
+
+    // float plottedSincTableValue = inputPointer < windowedSincTableSize?windowedSincTable[inputPointer]:0.43;
+    tableIndex++;
+    tableIndex %= windowedSincTableSize;
+    float plottedSincTableValue = windowedSincTable[tableIndex];
+    scope.log(plottedSincTableValue);//, lowPassedRingBuffer[inputPointer]);
 
 	}
 	// rt_printf("pointerIndices: %i, %i\n", inputPointer, (int)outputPointer);
