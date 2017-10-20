@@ -29,6 +29,7 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include <assert.h>
 
 #include "oscillator.h"
+#include "amdf.h"
 
 float inverseSampleRate;
 float phase = 0;
