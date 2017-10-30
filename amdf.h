@@ -1,9 +1,9 @@
 
 class Amdf {
 public:
-  float bestSoFar;
-  int bestSoFarIndex;
-  int bestSoFarIndexJump;
+  int jumpValue;
+  int amdfValue;
+  bool amdfIsDone = true;
 
   Amdf(int longestExpectedPeriodOfSignal){
     correlationWindowSize = longestExpectedPeriodOfSignal * amdf_C;
@@ -15,18 +15,22 @@ public:
 
 private:
   const float amdf_C = 3.0/8.0;
-  const int jumpLengthBetweenTestedSamples = 3;
+  const int jumpLengthBetweenTestedSamples = 10;
+  int bufferLength;
   int correlationWindowSize;
   int searchWindowSize;
 
+  float magSum = 0;
+  int currentSearchIndex;
+
+  float bestSoFar;
+  int bestSoFarIndex;
+  int bestSoFarIndexJump;
+
   float * sampleBuffer;
-  int bufferLength;
   int searchIndexStart;
   int searchIndexStop;
-  int currentSearchIndex;
   int compareIndexStart;
   int compareIndexStop;
-  bool amdfIsDone = true;
-  float magSum = 0;
 
 };

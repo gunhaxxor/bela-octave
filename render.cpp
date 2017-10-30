@@ -46,14 +46,14 @@ Oscillator osc;
 #define RINGBUFFER_SIZE LOWESTNOTEPERIOD * 4
 int inputPointer = 0;
 double outputPointer = 0;
-double outputPointerSpeed = 1.0f;
+double outputPointerSpeed = 0.75f;
 float ringBuffer[RINGBUFFER_SIZE];
 
 float lowPassedRingBuffer[RINGBUFFER_SIZE];
 float lowPassedSample = 0;
 
 //RMS stuff
-const float rms_C = 0.005;
+const float rms_C = 0.001;
 float squareSum = 0;
 float rmsValue = 0;
 
@@ -68,6 +68,7 @@ float windowedSincTable[windowedSincTableSize];
 float windowedSincTableDifferences[windowedSincTableSize];
 
 //Amdf stuff
+Amdf amdf = Amdf(LOWESTNOTEPERIOD);
 float crossfadeValue = 0;
 int previousJumpDistance = 0;
 
@@ -92,8 +93,7 @@ inline double normalizedSinc(double x){
 	if(x == 0){
 		return 1.0;
 	}
-  return sin(x)/x;
-  // return sinf_neon(x)/x;
+  return sin(x)/x; // will be used when building sinctable, so we want to use the best sin function.
 }
 
 float getBlackman(float x, float M){
@@ -156,71 +156,11 @@ float interpolateFromTable(float index){
 bool setup(BelaContext *context, void *userData)
 {
 	scope.setup(5, context->audioSampleRate, 1);
-  scope.setSlider(0, 0.25, 1.0, 0.05, 1.0);
+  scope.setSlider(0, 0.25, 1.0, 0.00001, 0.75);
 	inverseSampleRate = 1.0 / context->audioSampleRate;
   initializeWindowedSincTable();
+  amdf.initiateAMDF((int)outputPointer, inputPointer, ringBuffer, RINGBUFFER_SIZE);
 	return true;
-}
-
-const float amdf_C = 3.0/8.0;
-const int correlationWindowSize = LOWESTNOTEPERIOD * amdf_C;
-const int searchWindowSize = LOWESTNOTEPERIOD - correlationWindowSize;
-
-float bestSoFar;
-int bestSoFarIndex;
-int bestSoFarIndexJump;
-int searchIndexStart;
-int searchIndexStop;
-int currentSearchIndex;
-int compareIndexStart;
-int compareIndexStop;
-bool amdfIsDone = true;
-float magSum = 0;
-void initiateAMDF(){
-  bestSoFar = 10000000.0f;
-  searchIndexStart = (int) outputPointer;//wrapBufferSample(inputPointer - LOWESTNOTEPERIOD);
-  bestSoFarIndex = searchIndexStart;
-  searchIndexStop = searchIndexStart + searchWindowSize;
-
-  //initiate outer loop
-  currentSearchIndex = searchIndexStart;
-
-  //initiate inner loop
-  compareIndexStart = inputPointer - correlationWindowSize;
-  compareIndexStop = compareIndexStart + correlationWindowSize;
-  amdfIsDone = false;
-}
-
-bool amdf (){
-	// float bestSoFar = 10000000.0f;
-  // int searchIndexStart = wrapBufferSample(inputPointer - LOWESTNOTEPERIOD);
-	// int bestSoFarIndex = searchIndexStart;
-  // int searchIndexStop = searchIndexStart + searchWindowSize;
-  // for (int currentSearchIndex = searchIndexStart; currentSearchIndex < searchIndexStop; ++currentSearchIndex) {
-    magSum = 0;
-    for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex+=2, i+=2) {
-      int k = wrapBufferSample(currentCompareIndex);
-      int km = wrapBufferSample(currentSearchIndex + i);
-  		magSum += fabsf_neon(ringBuffer[km] - ringBuffer[k]);
-  	}
-    magSum /= correlationWindowSize;
-    if(magSum < bestSoFar){
-      bestSoFar = magSum;
-      bestSoFarIndex = currentSearchIndex%RINGBUFFER_SIZE;
-      bestSoFarIndexJump = wrapBufferSample(compareIndexStart - currentSearchIndex);
-    }
-  // }
-  if(currentSearchIndex < searchIndexStop){
-    amdfIsDone = false;
-  }else{
-    amdfIsDone = true;
-    magSum = bestSoFar;
-  }
-
-  currentSearchIndex++;
-
-  return amdfIsDone;
-  // return bestSoFarIndex;
 }
 
 int tableIndex = 0;
@@ -253,14 +193,9 @@ void render(BelaContext *context, void *userData)
 
 		ringBuffer[inputPointer] = in_l;
 
-    //test with moving pitch shift
     outputPointerSpeed = scope.getSliderValue(0);
-    if(outputPointerSpeed < 0.25){
-      outputPointerSpeed = 1.0f;
-    }
 
-
-		lowPassedSample = 0.1f * ringBuffer[inputPointer] + 0.9 * lowPassedSample; //+ 0.3f * lowPassedRingBuffer[wrapBufferSample(inputPointer-1)] + 0.5f * lowPassedRingBuffer[wrapBufferSample(inputPointer -2)];
+		// lowPassedSample = 0.1f * ringBuffer[inputPointer] + 0.9 * lowPassedSample; //+ 0.3f * lowPassedRingBuffer[wrapBufferSample(inputPointer-1)] + 0.5f * lowPassedRingBuffer[wrapBufferSample(inputPointer -2)];
 
     squareSum = (1.0f - rms_C) * squareSum + rms_C * in_l * in_l;
     rmsValue = sqrt(squareSum);
@@ -268,7 +203,7 @@ void render(BelaContext *context, void *userData)
     out_l = interpolateFromTable(outputPointer);
 
     double waveValue = osc.nextSample();
-    out_l = 0.06f * rmsValue  * waveValue + 0.1 * out_l;
+    out_l = 0.3f * rmsValue  * waveValue + 0.2 * out_l;
 
 		audioWrite(context, n, 0, out_l);
     audioWrite(context, n, 1, out_l);
@@ -285,38 +220,32 @@ void render(BelaContext *context, void *userData)
     crossfadeValue -= 0.003;
     crossfadeValue = max(crossfadeValue, 0.0f);
 
-    if (!amdfIsDone) {
-      if(amdf()){
-        previousJumpDistance = bestSoFarIndexJump;
-        osc.setFrequency(0.5* context->audioSampleRate / bestSoFarIndexJump);
-        outputPointer = wrapBufferSample(outputPointer + bestSoFarIndexJump);
-        scope.trigger();
-        jumpPulse = 0.5f;
-        crossfadeValue = 1.0f;
+    if(!amdf.amdfIsDone){
+      if(amdf.updateAMDF()){
+        previousJumpDistance = amdf.jumpValue;
+        if(amdf.jumpValue != 0){
+          osc.setFrequency(0.5* context->audioSampleRate / amdf.jumpValue);
+        }
+        amdf.initiateAMDF((int)outputPointer, inputPointer, ringBuffer, RINGBUFFER_SIZE);
       }
     }
+
     int distanceBetweenInOut = wrapBufferSample(inputPointer - outputPointer);
-    float proportionalDistance = ((float)distanceBetweenInOut) / ((float) RINGBUFFER_SIZE);
-    if(amdfIsDone && distanceBetweenInOut > RINGBUFFER_SIZE/4){
-      initiateAMDF();
-      // jumpPulse = 1.0;
+    if(distanceBetweenInOut > RINGBUFFER_SIZE/4){
+      outputPointer = wrapBufferSample(outputPointer + amdf.jumpValue);
+      crossfadeValue = 1.0f;
     }
 
     float outputPointerLocation = ((float)outputPointer) / ((float) RINGBUFFER_SIZE);
     float inputPointerLocation = ((float)inputPointer) / ((float) RINGBUFFER_SIZE);
 
-    // if(inputPointer%sincLengthBothSides == 0){
-    //   jumpPulse = 0.2f;
-    // }
-
-    // float plottedSincTableValue = inputPointer < windowedSincTableSize?windowedSincTable[inputPointer]:0.43;
     tableIndex++;
     tableIndex %= windowedSincTableSize;
     float plottedSincTableValue = windowedSincTable[tableIndex];
-    scope.log(in_l, out_l, rmsValue, waveValue, crossfadeValue);//, lowPassedRingBuffer[inputPointer]);
+    scope.log(in_l, out_l, inputPointerLocation, outputPointerLocation);//, lowPassedRingBuffer[inputPointer]);
 
 	}
-	// rt_printf("pointerIndices: %i, %i\n", inputPointer, (int)outputPointer);
+	// rt_printf("magSum: %i, %i\n", RINGBUFFER_SIZE, amdf.bufferLength);
 	// rt_printf("audio: %f, %f\n", in_l, out_l);
 }
 
