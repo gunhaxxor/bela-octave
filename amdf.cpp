@@ -1,17 +1,21 @@
 #include "amdf.h"
 #include <math_neon.h>
+#include <cmath>
 
 
 void Amdf::initiateAMDF(int searchIndexStart, int compareIndexStart, float* sampleBuffer, int bufferLength){
   this->sampleBuffer = sampleBuffer;
   this->bufferLength = bufferLength;
 
-  bestSoFar = 10000000.0f;
-  this->searchIndexStart = searchIndexStart;
-  searchIndexStop = searchIndexStart + searchWindowSize;
+  bestSoFar = pitchtrackingBestSoFar = 10000000.0f;
+  weight = this->maxWeight;
+  // this->searchIndexStart = searchIndexStart;
+  // searchIndexStop = searchIndexStart + searchWindowSize;
+  this->searchIndexStart = searchIndexStart - correlationWindowSize;
+  searchIndexStop = this->searchIndexStart + searchWindowSize;
 
   //initiate outer loop
-  currentSearchIndex = searchIndexStart;
+  currentSearchIndex = this->searchIndexStart;
 
   //initiate inner loop
   this->compareIndexStart = compareIndexStart - correlationWindowSize;
@@ -20,30 +24,45 @@ void Amdf::initiateAMDF(int searchIndexStart, int compareIndexStart, float* samp
 }
 
 bool Amdf::updateAMDF(){
-  magSum = 0;
+  amdfScore = pitchtrackingAmdfScore = 0;
   for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex+=jumpLengthBetweenTestedSamples, i+=jumpLengthBetweenTestedSamples) {
     int k = (currentCompareIndex + bufferLength)%bufferLength;
     // int k = wrapBufferSample(currentCompareIndex);
     int km = (currentSearchIndex + i + bufferLength)%bufferLength;
     // int km = wrapBufferSample(currentSearchIndex + i);
-  	magSum += fabsf_neon(sampleBuffer[km] - sampleBuffer[k]);
+  	amdfScore += fabsf_neon(sampleBuffer[km] - sampleBuffer[k]);
   }
-  magSum /= correlationWindowSize;
-  if(magSum < bestSoFar){
-    bestSoFar = magSum;
+  amdfScore /= nrOfTestedSamplesInCorrelationWindow;
+  if(amdfScore <= bestSoFar){
+    bestSoFar = amdfScore;
     bestSoFarIndex = currentSearchIndex%bufferLength;
     bestSoFarIndexJump = (compareIndexStart - currentSearchIndex + bufferLength)%bufferLength; //wrap around
-    // bestSoFarIndexJump = wrapBufferSample(compareIndexStart - currentSearchIndex);
+  }
+  // TODO: Find a smart way to keep track of both the shortest best score (for pitch detection)
+  // and the longest (for jumping the outputPointer) without too much extra processing
+
+  // weight starts high and becomes smaller with shrinking jumpdistance.
+  // This is to give smaller periods better "score" when detecting pitch.
+  pitchtrackingAmdfScore = amdfScore + weight;
+  if(pitchtrackingAmdfScore < pitchtrackingBestSoFar){
+    pitchtrackingBestSoFar = pitchtrackingAmdfScore;
+    pitchtrackingBestIndexJump = (compareIndexStart - currentSearchIndex + bufferLength)%bufferLength; //wrap around
   }
   if(currentSearchIndex < searchIndexStop){
     amdfIsDone = false;
   }else{
     amdfIsDone = true;
+    //this->jumpDifference = filter_C * std::abs(this->jumpValue - bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
     this->amdfValue = bestSoFar;
+    // if(std::abs(this->jumpValue - bestSoFarIndexJump) < 3){
+    //   this->jumpValue = 0.2 * bestSoFarIndexJump + 0.8 * this->jumpValue;
+    // }
     this->jumpValue = bestSoFarIndexJump;
+    this->frequencyEstimate = filter_C * (this->sampleRate / pitchtrackingBestIndexJump) + (1.0 - filter_C) * this->frequencyEstimate;
   }
 
   currentSearchIndex++;
+  weight -= weightIncrement;
 
   return amdfIsDone;
   // return bestSoFarIndex;
@@ -64,7 +83,7 @@ bool Amdf::updateAMDF(){
 // int compareIndexStart;
 // int compareIndexStop;
 // bool amdfIsDone = true;
-// float magSum = 0;
+// float amdfScore = 0;
 // void initiateAMDF_(){
 //   bestSoFar = 10000000.0f;
 //   searchIndexStart = (int) outputPointer;//wrapBufferSample(inputPointer - LOWESTNOTEPERIOD);
@@ -80,15 +99,15 @@ bool Amdf::updateAMDF(){
 // }
 //
 // bool amdf_(){
-//   magSum = 0;
+//   amdfScore = 0;
 //   for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex+=2, i+=2) {
 //     int k = wrapBufferSample(currentCompareIndex);
 //     int km = wrapBufferSample(currentSearchIndex + i);
-// 		magSum += fabsf_neon(ringBuffer[km] - ringBuffer[k]);
+// 		amdfScore += fabsf_neon(ringBuffer[km] - ringBuffer[k]);
 // 	}
-//   magSum /= correlationWindowSize;
-//   if(magSum < bestSoFar){
-//     bestSoFar = magSum;
+//   amdfScore /= correlationWindowSize;
+//   if(amdfScore < bestSoFar){
+//     bestSoFar = amdfScore;
 //     bestSoFarIndex = currentSearchIndex%RINGBUFFER_SIZE;
 //     bestSoFarIndexJump = wrapBufferSample(compareIndexStart - currentSearchIndex);
 //   }
@@ -96,7 +115,7 @@ bool Amdf::updateAMDF(){
 //     amdfIsDone = false;
 //   }else{
 //     amdfIsDone = true;
-//     magSum = bestSoFar;
+//     amdfScore = bestSoFar;
 //   }
 //
 //   currentSearchIndex++;
