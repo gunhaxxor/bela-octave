@@ -2,7 +2,7 @@
 #include <math_neon.h>
 #include <cmath>
 
-
+//TODO: Find the places where we actually have to do ringbuffer wrap. Should avoid it where not necessary.
 void Amdf::initiateAMDF(int searchIndexStart, int compareIndexStart, float* sampleBuffer, int bufferLength){
   this->sampleBuffer = sampleBuffer;
   this->bufferLength = bufferLength;
@@ -11,7 +11,7 @@ void Amdf::initiateAMDF(int searchIndexStart, int compareIndexStart, float* samp
   weight = this->maxWeight;
   // this->searchIndexStart = searchIndexStart;
   // searchIndexStop = searchIndexStart + searchWindowSize;
-  this->searchIndexStart = searchIndexStart - correlationWindowSize;
+  this->searchIndexStart = (searchIndexStart - correlationWindowSize);
   searchIndexStop = this->searchIndexStart + searchWindowSize;
 
   //initiate outer loop
@@ -35,7 +35,7 @@ bool Amdf::updateAMDF(){
   amdfScore /= nrOfTestedSamplesInCorrelationWindow;
   if(amdfScore <= bestSoFar){
     bestSoFar = amdfScore;
-    bestSoFarIndex = currentSearchIndex%bufferLength;
+    bestSoFarIndex = currentSearchIndex;//%bufferLength;
     bestSoFarIndexJump = (compareIndexStart - currentSearchIndex + bufferLength)%bufferLength; //wrap around
   }
   // TODO: Find a smart way to keep track of both the shortest best score (for pitch detection)
@@ -57,6 +57,7 @@ bool Amdf::updateAMDF(){
     // if(std::abs(this->jumpValue - bestSoFarIndexJump) < 3){
     //   this->jumpValue = 0.2 * bestSoFarIndexJump + 0.8 * this->jumpValue;
     // }
+    this->previousJumpValue = this->jumpValue;
     this->jumpValue = bestSoFarIndexJump;
     this->frequencyEstimate = filter_C * (this->sampleRate / pitchtrackingBestIndexJump) + (1.0 - filter_C) * this->frequencyEstimate;
   }

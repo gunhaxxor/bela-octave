@@ -2,6 +2,7 @@
 class Amdf {
 public:
   int jumpValue;
+  int previousJumpValue;
   float frequencyEstimate;
   int amdfValue;
   bool amdfIsDone = true;
