@@ -35,7 +35,7 @@ bool Amdf::updateAMDF(){
   amdfScore /= nrOfTestedSamplesInCorrelationWindow;
   if(amdfScore <= bestSoFar){
     bestSoFar = amdfScore;
-    bestSoFarIndex = currentSearchIndex;//%bufferLength;
+    bestSoFarIndex = currentSearchIndex%bufferLength;
     bestSoFarIndexJump = (compareIndexStart - currentSearchIndex + bufferLength)%bufferLength; //wrap around
   }
   // TODO: Find a smart way to keep track of both the shortest best score (for pitch detection)
@@ -52,14 +52,24 @@ bool Amdf::updateAMDF(){
     amdfIsDone = false;
   }else{
     amdfIsDone = true;
-    //this->jumpDifference = filter_C * std::abs(this->jumpValue - bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
+
     this->amdfValue = bestSoFar;
+    this->previousJumpValue = this->jumpValue;
+    this->jumpValue = bestSoFarIndexJump;
+
     // if(std::abs(this->jumpValue - bestSoFarIndexJump) < 3){
     //   this->jumpValue = 0.2 * bestSoFarIndexJump + 0.8 * this->jumpValue;
     // }
-    this->previousJumpValue = this->jumpValue;
-    this->jumpValue = bestSoFarIndexJump;
-    this->frequencyEstimate = filter_C * (this->sampleRate / pitchtrackingBestIndexJump) + (1.0 - filter_C) * this->frequencyEstimate;
+
+    //this->jumpDifference = filter_C * std::abs(this->jumpValue - bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
+    float newFreqEstimate = (this->sampleRate / pitchtrackingBestIndexJump);
+    float average_C = 0.007;
+    frequencyEstimateAveraged = average_C * newFreqEstimate + (1.0f - average_C) * frequencyEstimateAveraged;
+    //TODO: Replace this division with something that actually corresponds to pitchdistance from average!!!
+    this->frequencyEstimateScore = 1.0f - fabsf_neon(std::fmin(newFreqEstimate / frequencyEstimateAveraged, 1.0f) - 1.0f);
+
+    float estimate_C = 0.3f;
+    this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 - estimate_C) * this->frequencyEstimate;
   }
 
   currentSearchIndex++;

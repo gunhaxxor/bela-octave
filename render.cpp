@@ -51,11 +51,11 @@ DcBlocker dcBlocker;
 // #define HIGHESTNOTEPERIOD 50 //50 CORRESPONDS TO pitch of 882 Hz if samplerate is 44.1 kHz
 // #define ringBufferSize LOWESTNOTEPERIOD * 4
 
-const int lowestTrackableFrequency = 103;
+const int lowestTrackableFrequency = 95;
 const int highestTrackableFrequency = 882;
 const int lowestTrackableNotePeriod = SAMPLERATE / lowestTrackableFrequency;
 const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
-const int ringBufferSize = lowestTrackableNotePeriod * 4;
+const int ringBufferSize = lowestTrackableNotePeriod * 8;
 
 int inputPointer = 0;
 double outputPointer = 0;
@@ -182,7 +182,7 @@ bool setup(BelaContext *context, void *userData)
 	scope.setup(5, context->audioSampleRate, 2);
   scope.setSlider(0, 0.25, 1.0, 0.00001, .5f);
   // scope.setSlider(1, 100.0, 430.0, 0.0001, 104.0f);
-  scope.setSlider(1, 0.0, 1.0, 0.00001, 1.0f);
+  scope.setSlider(1, 0.0, 1.0, 0.00001, .3f);
 
 	inverseSampleRate = 1.0 / context->audioSampleRate;
 
@@ -197,6 +197,10 @@ bool setup(BelaContext *context, void *userData)
 float frequency = 100;
 float jumpPulse = 0;
 float phase2 = 0;
+
+float oscTargetAmplitude;
+float oscAmplitude;
+float oscAmplitudeIncrement = .001f;
 
 
 void render(BelaContext *context, void *userData)
@@ -233,9 +237,17 @@ void render(BelaContext *context, void *userData)
     out_l = interpolateFromTable(outputPointer);
 
     double waveValue = osc.nextSample();
-
     float mix = scope.getSliderValue(1);
-    out_l = (1.0f - mix) * rmsValue  * waveValue +  mix * out_l;
+
+    oscTargetAmplitude = amdf.frequencyEstimateScore;
+    if(oscAmplitude > oscTargetAmplitude + oscAmplitudeIncrement){
+      oscAmplitude -= oscAmplitudeIncrement;
+    }else if(oscAmplitude < oscTargetAmplitude){
+      oscAmplitude += oscAmplitudeIncrement;
+    }
+
+    float waveThreshold = 0.016;
+    out_l = (1.0f - mix) * max(rmsValue - waveThreshold, 0.0f) * oscAmplitude * waveValue +  mix * out_l;
 
 		audioWrite(context, n, 0, out_l);
     audioWrite(context, n, 1, out_l);
@@ -255,7 +267,7 @@ void render(BelaContext *context, void *userData)
     if(!amdf.amdfIsDone){
       if(amdf.updateAMDF()){
         if(amdf.frequencyEstimate < highestTrackableFrequency){
-          osc.setFrequency(0.5f *amdf.frequencyEstimate);
+          osc.setFrequency(0.25f *amdf.frequencyEstimate);
         }
         amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer, ringBuffer, ringBufferSize);
         // scope.trigger();
@@ -264,7 +276,7 @@ void render(BelaContext *context, void *userData)
 
     int distanceBetweenInOut = wrapBufferSample(inputPointer - outputPointer);
     if(distanceBetweenInOut > ringBufferSize/4){
-      fadingOutputPointerOffset = amdf.previousJumpValue;
+      fadingOutputPointerOffset = amdf.jumpValue;//We're gonna jump this far. so save the distance to be able to crossfade to were we are now.
       outputPointer = wrapBufferSample(outputPointer + amdf.jumpValue);
       // TODO: Better solution for avoiding divbyzero. Now we're using 1.1 to tackle that.
       float samplesUntilNewJump = (amdf.jumpValue/(1.1 - outputPointerSpeed));
@@ -279,7 +291,7 @@ void render(BelaContext *context, void *userData)
     // tableIndex++;
     // tableIndex %= windowedSincTableSize;
     // float plottedSincTableValue = windowedSincTable[tableIndex];
-    scope.log(out_l, inputPointerLocation, outputPointerLocation, crossfadeValue);//, lowPassedRingBuffer[inputPointer]);
+    scope.log(out_l, inputPointerLocation, outputPointerLocation, crossfadeValue, oscAmplitude);//, lowPassedRingBuffer[inputPointer]);
 
 	}
 	// rt_printf("magSum: %i, %i\n", ringBufferSize, amdf.bufferLength);

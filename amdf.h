@@ -4,11 +4,12 @@ public:
   int jumpValue;
   int previousJumpValue;
   float frequencyEstimate;
+  float frequencyEstimateScore;
   int amdfValue;
   bool amdfIsDone = true;
   float jumpDifference = 0;
 
-  float pitchtrackingAmdfScore;
+  // float pitchtrackingAmdfScore;
 
 
   Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal){
@@ -39,7 +40,8 @@ private:
   int bestSoFarIndex;
   int bestSoFarIndexJump;
 
-  // float pitchtrackingAmdfScore;
+  float frequencyEstimateAveraged = 0;
+  float pitchtrackingAmdfScore;
   float pitchtrackingBestSoFar;
   float pitchtrackingBestIndexJump;
 
