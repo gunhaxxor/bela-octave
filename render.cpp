@@ -179,10 +179,13 @@ bool setup(BelaContext *context, void *userData)
   // highestTrackableNotePeriod = context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY;
   // ringBufferSize = lowestTrackableNotePeriod * 4;
 
-	scope.setup(5, context->audioSampleRate, 2);
+	scope.setup(5, context->audioSampleRate, 5);
   scope.setSlider(0, 0.25, 1.0, 0.00001, .5f);
   // scope.setSlider(1, 100.0, 430.0, 0.0001, 104.0f);
-  scope.setSlider(1, 0.0, 1.0, 0.00001, .3f);
+  scope.setSlider(1, 0.0, 1.0, 0.00001, 0.3f);
+  scope.setSlider(2, 0.0, 1.0, 0.00001, 0.3f);
+  scope.setSlider(3, 0.0, 1.0, 0.00001, 0.3f);
+  // scope.setSlider(5, 0.0, 1.0, 0.00001, 1.0f);
 
 	inverseSampleRate = 1.0 / context->audioSampleRate;
 
@@ -234,10 +237,15 @@ void render(BelaContext *context, void *userData)
     squareSum = (1.0f - rms_C) * squareSum + rms_C * in_l * in_l;
     rmsValue = sqrt(squareSum);
 
-    out_l = interpolateFromTable(outputPointer);
+    float pitchedSample = interpolateFromTable(outputPointer);
 
     double waveValue = osc.nextSample();
-    float mix = scope.getSliderValue(1);
+
+    float dryMix =  scope.getSliderValue(1);
+
+    float pitchMix = scope.getSliderValue(2);
+
+    float synthMix = scope.getSliderValue(3);
 
     oscTargetAmplitude = amdf.frequencyEstimateScore;
     if(oscAmplitude > oscTargetAmplitude + oscAmplitudeIncrement){
@@ -247,7 +255,9 @@ void render(BelaContext *context, void *userData)
     }
 
     float waveThreshold = 0.016;
-    out_l = (1.0f - mix) * max(rmsValue - waveThreshold, 0.0f) * oscAmplitude * waveValue +  mix * out_l;
+    out_l = dryMix * in_l
+            + synthMix * max(rmsValue - waveThreshold, 0.0f) * oscAmplitude * waveValue
+            + pitchMix * pitchedSample;
 
 		audioWrite(context, n, 0, out_l);
     audioWrite(context, n, 1, out_l);
@@ -267,7 +277,7 @@ void render(BelaContext *context, void *userData)
     if(!amdf.amdfIsDone){
       if(amdf.updateAMDF()){
         if(amdf.frequencyEstimate < highestTrackableFrequency){
-          osc.setFrequency(0.25f *amdf.frequencyEstimate);
+          osc.setFrequency(0.5f *amdf.frequencyEstimate);
         }
         amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer, ringBuffer, ringBufferSize);
         // scope.trigger();

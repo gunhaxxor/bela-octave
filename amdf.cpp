@@ -65,8 +65,12 @@ bool Amdf::updateAMDF(){
     float newFreqEstimate = (this->sampleRate / pitchtrackingBestIndexJump);
     float average_C = 0.007;
     frequencyEstimateAveraged = average_C * newFreqEstimate + (1.0f - average_C) * frequencyEstimateAveraged;
-    //TODO: Replace this division with something that actually corresponds to pitchdistance from average!!!
-    this->frequencyEstimateScore = 1.0f - fabsf_neon(std::fmin(newFreqEstimate / frequencyEstimateAveraged, 1.0f) - 1.0f);
+    
+    float ratio = newFreqEstimate / frequencyEstimateAveraged;
+    float semiTones = logf_neon(ratio) * this.->inverseLog_2;
+    // float score = std::fmax(0.0f, 1.0f - (ratio - 1.0f) * 10);
+    this->frequencyEstimateScore = std::fmax(1.0 - fabsf_neon(semiTones), 0.0f);
+    // this->frequencyEstimateScore = 1.0f - fabsf_neon(std::fmin(newFreqEstimate / frequencyEstimateAveraged, 1.0f) - 1.0f);
 
     float estimate_C = 0.3f;
     this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 - estimate_C) * this->frequencyEstimate;

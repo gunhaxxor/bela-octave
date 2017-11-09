@@ -31,6 +31,7 @@ private:
   const float amdf_C = 2.0/8.0;
   const int jumpLengthBetweenTestedSamples = 10;
   const float maxWeight = 0.05f;
+  const float inverseLog_2 = 1/std::logf(2);
   float weight;
   float weightIncrement;
   float filter_C = 0.5;
