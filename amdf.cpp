@@ -9,6 +9,7 @@ void Amdf::initiateAMDF(int searchIndexStart, int compareIndexStart, float* samp
 
   bestSoFar = pitchtrackingBestSoFar = 10000000.0f;
   weight = this->maxWeight;
+  previousPitchTrackingAmdfScores[0] = 10000000.0f;
   // this->searchIndexStart = searchIndexStart;
   // searchIndexStop = searchIndexStart + searchWindowSize;
   this->searchIndexStart = (searchIndexStart - correlationWindowSize);
@@ -43,10 +44,24 @@ bool Amdf::updateAMDF(){
 
   // weight starts high and becomes smaller with shrinking jumpdistance.
   // This is to give smaller periods better "score" when detecting pitch.
+  atTurnPoint = false;
   pitchtrackingAmdfScore = amdfScore + weight;
+  if(currentSearchIndex%5 == 0){
+    atTurnPoint =  //previousPitchTrackingAmdfScores[1] > previousPitchTrackingAmdfScores[0]
+                 previousPitchTrackingAmdfScores[0] < pitchtrackingAmdfScore;
+    // atTurnPoint = previousPitchTrackingAmdfScores[0] > pitchtrackingAmdfScore;
+    if(atTurnPoint){
+      // weight -= weightIncrement*5;
+      weight -= (pitchtrackingAmdfScore - previousPitchTrackingAmdfScores[0])*0.1f;
+    }
+
+    previousPitchTrackingAmdfScores[1] = previousPitchTrackingAmdfScores[0];
+    previousPitchTrackingAmdfScores[0] = pitchtrackingAmdfScore;
+  }
   if(pitchtrackingAmdfScore < pitchtrackingBestSoFar){
     pitchtrackingBestSoFar = pitchtrackingAmdfScore;
     pitchtrackingBestIndexJump = (compareIndexStart - currentSearchIndex + bufferLength)%bufferLength; //wrap around
+  }else{
   }
   if(currentSearchIndex < searchIndexStop){
     amdfIsDone = false;
@@ -57,27 +72,31 @@ bool Amdf::updateAMDF(){
     this->previousJumpValue = this->jumpValue;
     this->jumpValue = bestSoFarIndexJump;
 
-    // if(std::abs(this->jumpValue - bestSoFarIndexJump) < 3){
-    //   this->jumpValue = 0.2 * bestSoFarIndexJump + 0.8 * this->jumpValue;
-    // }
-
     //this->jumpDifference = filter_C * std::abs(this->jumpValue - bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
     float newFreqEstimate = (this->sampleRate / pitchtrackingBestIndexJump);
-    float average_C = 0.007;
-    frequencyEstimateAveraged = average_C * newFreqEstimate + (1.0f - average_C) * frequencyEstimateAveraged;
-    
-    float ratio = newFreqEstimate / frequencyEstimateAveraged;
-    float semiTones = logf_neon(ratio) * this.->inverseLog_2;
-    // float score = std::fmax(0.0f, 1.0f - (ratio - 1.0f) * 10);
-    this->frequencyEstimateScore = std::fmax(1.0 - fabsf_neon(semiTones), 0.0f);
-    // this->frequencyEstimateScore = 1.0f - fabsf_neon(std::fmin(newFreqEstimate / frequencyEstimateAveraged, 1.0f) - 1.0f);
+    float average_C = 0.002;
+    // frequencyEstimateAveraged = average_C * newFreqEstimate + (1.0f - average_C) * frequencyEstimateAveraged;
+
+    // float newPitchEstimate = 69 + 12 * logf_neon(newFreqEstimate/440.0f) * this->inverseLog_2;
+    float newPitchEstimate = 0.5 * logf_neon(newFreqEstimate/440.0f) * this->inverseLog_2;
+    pitchEstimateAveraged = average_C * newPitchEstimate + (1.0f - average_C) * pitchEstimateAveraged;
+
+    // float ratio = newFreqEstimate / frequencyEstimateAveraged;
+    // float semiTones = logf_neon(ratio) * this->inverseLog_2;
+    // // float score = std::fmax(0.0f, 1.0f - (ratio - 1.0f) * 10);
+    // this->frequencyEstimateScore = std::fmax(1.0 - fabsf_neon(semiTones), 0.0f);
+
+    if(this->frequencyEstimateScore < 0.4){
+      this->frequencyEstimateScore = 0.0;
+    }
 
     float estimate_C = 0.3f;
     this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 - estimate_C) * this->frequencyEstimate;
+    this->pitchEstimate = estimate_C * newPitchEstimate + (1.0 - estimate_C) * this->pitchEstimate;
   }
 
   currentSearchIndex++;
-  weight -= weightIncrement;
+  // weight -= weightIncrement;
 
   return amdfIsDone;
   // return bestSoFarIndex;

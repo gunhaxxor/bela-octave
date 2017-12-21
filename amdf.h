@@ -1,15 +1,24 @@
+#include <cmath>
+#include <math_neon.h>
 
 class Amdf {
 public:
   int jumpValue;
   int previousJumpValue;
+
+  float pitchEstimate;
   float frequencyEstimate;
   float frequencyEstimateScore;
   int amdfValue;
   bool amdfIsDone = true;
   float jumpDifference = 0;
 
-  // float pitchtrackingAmdfScore;
+  float pitchtrackingAmdfScore;
+  float previousPitchTrackingAmdfScores[2] = {5.0, 5.0};
+  bool atTurnPoint = false;
+
+  //debug
+  bool minimiPoint = false;
 
 
   Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal){
@@ -27,11 +36,11 @@ public:
   void initiateAMDF(int searchIndexStart, int compareIndexStart, float * sampleBuffer, int bufferLength);
   bool updateAMDF();
 
-private:
+// private:
   const float amdf_C = 2.0/8.0;
-  const int jumpLengthBetweenTestedSamples = 10;
-  const float maxWeight = 0.05f;
-  const float inverseLog_2 = 1/std::logf(2);
+  const int jumpLengthBetweenTestedSamples = 5;
+  const float maxWeight = 0.09f;
+  const float inverseLog_2 = 1/logf(2);
   float weight;
   float weightIncrement;
   float filter_C = 0.5;
@@ -41,8 +50,10 @@ private:
   int bestSoFarIndex;
   int bestSoFarIndexJump;
 
+  float pitchEstimateAveraged = 0;
+
   float frequencyEstimateAveraged = 0;
-  float pitchtrackingAmdfScore;
+  // float pitchtrackingAmdfScore;
   float pitchtrackingBestSoFar;
   float pitchtrackingBestIndexJump;
 

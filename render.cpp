@@ -52,7 +52,7 @@ DcBlocker dcBlocker;
 // #define ringBufferSize LOWESTNOTEPERIOD * 4
 
 const int lowestTrackableFrequency = 95;
-const int highestTrackableFrequency = 882;
+const int highestTrackableFrequency = 800;
 const int lowestTrackableNotePeriod = SAMPLERATE / lowestTrackableFrequency;
 const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
 const int ringBufferSize = lowestTrackableNotePeriod * 8;
@@ -67,7 +67,7 @@ float lowPassedRingBuffer[ringBufferSize];
 float lowPassedSample = 0;
 
 //RMS stuff
-const float rms_C = 0.005;
+const float rms_C = 0.0005;
 float squareSum = 0;
 float rmsValue = 0;
 
@@ -179,13 +179,15 @@ bool setup(BelaContext *context, void *userData)
   // highestTrackableNotePeriod = context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY;
   // ringBufferSize = lowestTrackableNotePeriod * 4;
 
-	scope.setup(5, context->audioSampleRate, 5);
+	scope.setup(5, context->audioSampleRate, 7);
+  // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
   scope.setSlider(0, 0.25, 1.0, 0.00001, .5f);
-  // scope.setSlider(1, 100.0, 430.0, 0.0001, 104.0f);
-  scope.setSlider(1, 0.0, 1.0, 0.00001, 0.3f);
-  scope.setSlider(2, 0.0, 1.0, 0.00001, 0.3f);
-  scope.setSlider(3, 0.0, 1.0, 0.00001, 0.3f);
-  // scope.setSlider(5, 0.0, 1.0, 0.00001, 1.0f);
+  scope.setSlider(1, 0.0, 1.0, 0.00001, 0.2f);
+  scope.setSlider(2, 0.0, 1.0, 0.00001, 0.0f);
+  scope.setSlider(3, 0.0, 1.0, 0.00001, 0.1f);
+  scope.setSlider(4, 0.25, 2.0, 0.00001, 0.5f);
+  scope.setSlider(5, 0.001f, 1.0, 0.00001, 0.125f);
+  scope.setSlider(6, 0.0f, 1.0f, 0.00001, 0.2f);
 
 	inverseSampleRate = 1.0 / context->audioSampleRate;
 
@@ -203,20 +205,29 @@ float phase2 = 0;
 
 float oscTargetAmplitude;
 float oscAmplitude;
-float oscAmplitudeIncrement = .001f;
+float oscAmplitudeIncrement = .00001f;
 
+float filteredAmplitudeC = 0.01;
+float filteredAmplitude = 0.0f;
 
 void render(BelaContext *context, void *userData)
 {
 	for(unsigned int n = 0; n < context->audioFrames; n++) {
     //read input, with dc blocking
     in_l = dcBlocker.filter(audioRead(context, n, 0));
+    // in_r = dcBlocker.filter(audioRead(context, n, 1));
 
+    // //bypass
+    // audioWrite(context, n, 0, audioRead(context, n, 0));
+    // audioWrite(context, n, 1, audioRead(context, n, 1));
+    // continue;
+
+    // float factor = scope.getSliderValue(0);
     // // Create sine wave
-    // phase += 2.0 * M_PI * frequency * inverseSampleRate;
+    // phase += factor * 2.0 * M_PI * frequency * inverseSampleRate;
     // // float sample = phase;
     // float sample = sin(phase);
-    // in_l = 0.1f * sample;
+    // in_l = 0.08f * sample;
     //
 		// if(phase > M_PI){
 		// 	phase -= 2.0 * M_PI;
@@ -234,8 +245,13 @@ void render(BelaContext *context, void *userData)
 
     outputPointerSpeed = scope.getSliderValue(0);
 
+    //RMS calculations
     squareSum = (1.0f - rms_C) * squareSum + rms_C * in_l * in_l;
     rmsValue = sqrt(squareSum);
+
+    //Envelope follower calculations
+    filteredAmplitude = filteredAmplitudeC * fabsf_neon(in_l) + (1 - filteredAmplitudeC) * filteredAmplitude;
+
 
     float pitchedSample = interpolateFromTable(outputPointer);
 
@@ -247,17 +263,34 @@ void render(BelaContext *context, void *userData)
 
     float synthMix = scope.getSliderValue(3);
 
+    float synthPitch = scope.getSliderValue(4);
+
+    float tremoloPitch = scope.getSliderValue(5);
+
+    float tremoloMix = scope.getSliderValue(6);
+
     oscTargetAmplitude = amdf.frequencyEstimateScore;
     if(oscAmplitude > oscTargetAmplitude + oscAmplitudeIncrement){
       oscAmplitude -= oscAmplitudeIncrement;
     }else if(oscAmplitude < oscTargetAmplitude){
-      oscAmplitude += oscAmplitudeIncrement;
+      oscAmplitude += 2*oscAmplitudeIncrement;
     }
+
+    phase += tremoloPitch * 2.0 * M_PI * frequency * inverseSampleRate;
+    if(phase > M_PI){
+			phase -= 2.0 * M_PI;
+    }
+    float tremoloSample = sinf_neon(phase);
+    tremoloSample = 0.5f * (tremoloSample + 1) * tremoloMix;
 
     float waveThreshold = 0.016;
     out_l = dryMix * in_l
-            + synthMix * max(rmsValue - waveThreshold, 0.0f) * oscAmplitude * waveValue
+            // + synthMix * max(rmsValue - waveThreshold, 0.0f) * waveValue
+            + synthMix * filteredAmplitude * waveValue
+            // + synthMix * sinf_neon(pitchMix * in_l);
             + pitchMix * pitchedSample;
+
+    out_l = out_l * (1.0 - tremoloSample);
 
 		audioWrite(context, n, 0, out_l);
     audioWrite(context, n, 1, out_l);
@@ -277,10 +310,12 @@ void render(BelaContext *context, void *userData)
     if(!amdf.amdfIsDone){
       if(amdf.updateAMDF()){
         if(amdf.frequencyEstimate < highestTrackableFrequency){
-          osc.setFrequency(0.5f *amdf.frequencyEstimate);
+          // osc.setFrequency(0.5f *amdf.frequencyEstimate);
+          frequency = 440.0f * powf_neon(2,2*amdf.pitchEstimate);
+          osc.setFrequency(synthPitch * 0.5f * frequency);
         }
         amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer, ringBuffer, ringBufferSize);
-        // scope.trigger();
+        scope.trigger();
       }
     }
 
@@ -292,7 +327,7 @@ void render(BelaContext *context, void *userData)
       float samplesUntilNewJump = (amdf.jumpValue/(1.1 - outputPointerSpeed));
       crossFadeIncrement = 1.0f / samplesUntilNewJump;
       crossfadeValue = 1.0f;
-      scope.trigger();
+      // scope.trigger();
     }
 
     float outputPointerLocation = ((float)outputPointer) / ((float) ringBufferSize);
@@ -301,7 +336,9 @@ void render(BelaContext *context, void *userData)
     // tableIndex++;
     // tableIndex %= windowedSincTableSize;
     // float plottedSincTableValue = windowedSincTable[tableIndex];
-    scope.log(out_l, inputPointerLocation, outputPointerLocation, crossfadeValue, oscAmplitude);//, lowPassedRingBuffer[inputPointer]);
+    // scope.log(in_l, out_l, 0.6 * (int)amdf.atTurnPoint, 10*amdf.weight, amdf.pitchtrackingAmdfScore);//, lowPassedRingBuffer[inputPointer]);
+    // scope.log(in_l, rmsValue, filteredAmplitude);
+    scope.log(out_l);
 
 	}
 	// rt_printf("magSum: %i, %i\n", ringBufferSize, amdf.bufferLength);
