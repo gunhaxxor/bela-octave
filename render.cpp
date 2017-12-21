@@ -20,6 +20,7 @@ http://www.eecs.qmul.ac.uk/~andrewm
 The Bela software is distributed under the GNU Lesser General Public License
 (LGPL 3.0), available    here: https://www.gnu.org/licenses/lgpl-3.0.txt
 */
+
 #include <Bela.h>
 #include <Scope.h>
 #include <cmath>
