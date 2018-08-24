@@ -1,14 +1,19 @@
-#include <cmath>
-#include <math_neon.h>
+#ifndef AMDF_H
+#define AMDF_H
 
-class Amdf {
+#include <math_neon.h>
+#include <cmath>
+#include "utility.h"
+
+class Amdf
+{
 public:
   int jumpValue;
   int previousJumpValue;
 
   float pitchEstimate;
   float frequencyEstimate;
-  float frequencyEstimateScore;
+  float frequencyEstimateConfidence;
   int amdfValue;
   bool amdfIsDone = true;
   float jumpDifference = 0;
@@ -20,27 +25,28 @@ public:
   //debug
   bool minimiPoint = false;
 
-
-  Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal){
+  Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal)
+  {
     correlationWindowSize = longestExpectedPeriodOfSignal * amdf_C;
     // searchWindowSize = longestExpectedPeriodOfSignal - correlationWindowSize;
-    searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal;// - correlationWindowSize;
+    searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal; // - correlationWindowSize;
     nrOfTestedSamplesInCorrelationWindow = correlationWindowSize / jumpLengthBetweenTestedSamples;
 
     weightIncrement = maxWeight / searchWindowSize;
   }
 
-  void setup(int sampleRate){
+  void setup(int sampleRate)
+  {
     this->sampleRate = sampleRate;
   }
-  void initiateAMDF(int searchIndexStart, int compareIndexStart, float * sampleBuffer, int bufferLength);
+  void initiateAMDF(int searchIndexStart, int compareIndexStart, float *sampleBuffer, int bufferLength);
   bool updateAMDF();
 
-// private:
-  const float amdf_C = 2.0/8.0;
+  // private:
+  const float amdf_C = 2.0 / 8.0;
   const int jumpLengthBetweenTestedSamples = 5;
   const float maxWeight = 0.09f;
-  const float inverseLog_2 = 1/logf(2);
+  const float inverseLog_2 = 1 / logf(2);
   float weight;
   float weightIncrement;
   float filter_C = 0.5;
@@ -52,6 +58,7 @@ public:
 
   float pitchEstimateAveraged = 0;
 
+  float previousFrequencyEstimate = 0;
   float frequencyEstimateAveraged = 0;
   // float pitchtrackingAmdfScore;
   float pitchtrackingBestSoFar;
@@ -65,9 +72,11 @@ public:
   int currentSearchIndex;
 
   int sampleRate;
-  float * sampleBuffer;
+  float *sampleBuffer;
   int searchIndexStart;
   int searchIndexStop;
   int compareIndexStart;
   int compareIndexStop;
 };
+
+#endif

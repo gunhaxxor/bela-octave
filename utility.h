@@ -4,15 +4,31 @@
 #include <cmath>
 #include <math_neon.h>
 
-inline int16_t floatToQ11( float value)
+// inline int16_t floatToQ11(float value)
+// {
+// 	return value * (0x01 << 11);
+// }
+
+// inline float Q11ToFloat(int16_t value)
+// {
+// 	return ((float)value) / (0x01 << 11);
+// }
+
+inline int wrapBufferSample(int n, int size)
 {
-	return value * (0x01 << 11);
+	n += size;
+	n %= size;
+	return n;
 }
 
-inline float Q11ToFloat( int16_t value)
+inline float wrapBufferSample(float n, int size)
 {
-	return ((float) value) / (0x01 << 11);
+	return fmodf_neon(n + size, size);
 }
 
+inline double wrapBufferSample(double n, int size)
+{
+	return fmodf_neon(n + size, size);
+}
 
 #endif
