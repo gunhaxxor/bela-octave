@@ -29,10 +29,7 @@ public:
     delete this->combRingBuffer;
   }
 
-  void setFilterType(filterTypeEnum filterType)
-  {
-    this->filterType = filterType;
-  }
+  void setFilterType(filterTypeEnum filterType) { this->filterType = filterType; }
 
   void setFilterType(float typeValue)
   {
@@ -81,10 +78,7 @@ public:
     }
   }
 
-  void setPolarity(bool isPlus)
-  {
-    this->combPolarity = isPlus ? 1.0f : -1.0f;
-  }
+  void setPolarity(bool isPlus) { this->combPolarity = isPlus ? 1.0f : -1.0f; }
 
 private:
   int sampleRate;

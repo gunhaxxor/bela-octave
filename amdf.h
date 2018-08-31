@@ -44,7 +44,7 @@ public:
 
   // private:
   const float amdf_C = 2.0 / 8.0;
-  const int jumpLengthBetweenTestedSamples = 5;
+  const int jumpLengthBetweenTestedSamples = 15;
   const float maxWeight = 0.09f;
   const float inverseLog_2 = 1 / logf(2);
   float weight;

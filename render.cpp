@@ -32,6 +32,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include "delay.h"
 #include "filter.h"
 #include "waveshaper.h"
+#include "pitch_shifter.h"
+
 #include "amdf.h"
 #include "sinc_interpolation.h"
 #include "dc_blocker.h"
@@ -61,9 +63,9 @@ const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
 const int ringBufferSize = lowestTrackableNotePeriod * 8;
 
 int inputPointer = 0;
-float outputPointer = 0;
-float fadingOutputPointerOffset = 0;
-float outputPointerSpeed = 0.75f;
+// float outputPointer = 0;
+// float fadingOutputPointerOffset = 0;
+// float outputPointerSpeed = 0.75f;
 float ringBuffer[ringBufferSize];
 
 float lowPassedRingBuffer[ringBufferSize];
@@ -75,7 +77,7 @@ float squareSum = 0;
 float rmsValue = 0;
 
 //Interpolation stuff!
-float crossFadeIncrement = 0.001f;
+// float crossFadeIncrement = 0.001f;
 // const int sincTableScaleFactor = 10000;
 // const int sincLength = 10;
 // const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sincLength on both sides of the affected sample.
@@ -87,7 +89,7 @@ float crossFadeIncrement = 0.001f;
 
 //Amdf stuff
 Amdf amdf = Amdf(lowestTrackableNotePeriod, highestTrackableNotePeriod);
-float crossfadeValue = 0;
+// float crossfadeValue = 0;
 
 // float pitchRingBuffer1[ringBufferSize];
 // float pitchRingBuffer2[ringBufferSize];
@@ -97,6 +99,8 @@ Delay audioDelay = Delay(SAMPLERATE, 1.0f);
 Filter combFilter = Filter(SAMPLERATE, Filter::COMB);
 
 Waveshaper waveshaper = Waveshaper(Waveshaper::TANH);
+
+PitchShifter pitchShifter = PitchShifter(SAMPLERATE, 95.0f, 800.0f, 0.5f);
 
 float bypassProcess(float inSample)
 {
@@ -197,7 +201,7 @@ bool setup(BelaContext *context, void *userData)
   // highestTrackableNotePeriod = context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY;
   // ringBufferSize = lowestTrackableNotePeriod * 4;
 
-  scope.setup(5, context->audioSampleRate, 12);
+  scope.setup(5, context->audioSampleRate, 7);
   // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
   scope.setSlider(0, 0.0, 1.0, 0.00001, 0.5f, "dry mix");
   scope.setSlider(1, 0.0, 1.0, 0.00001, 0.0f, "pitch mix");
@@ -206,11 +210,11 @@ bool setup(BelaContext *context, void *userData)
   scope.setSlider(4, 0.25, 2.0, 0.00001, 0.5f, "synth pitch");
   scope.setSlider(5, 0.0, 4.0, 1.0, 0.0f, "synth waveform");
   scope.setSlider(6, 0.0, 1.0, 1.0, 0.0f, "filter type");
-  scope.setSlider(7, 20.0, 10000.0, 0.1, 500.0, "filter cutoff");
-  scope.setSlider(8, 0.0f, 1.0f, 0.00001, 0.0f, "filter resonance");
-  scope.setSlider(9, 0.0f, 1.0f, 0.00001, 0.0f, "env to cutoff");
-  scope.setSlider(10, 0.0f, 3.0f, 1.0, 0.0f, "shaper type");
-  scope.setSlider(11, 0.0f, 10.0f, 0.00001, 1.0f, "shaper drive");
+  // scope.setSlider(7, 20.0, 10000.0, 0.1, 500.0, "filter cutoff");
+  // scope.setSlider(8, 0.0f, 1.0f, 0.00001, 0.0f, "filter resonance");
+  // scope.setSlider(9, 0.0f, 1.0f, 0.00001, 0.0f, "env to cutoff");
+  // scope.setSlider(10, 0.0f, 3.0f, 1.0, 0.0f, "shaper type");
+  // scope.setSlider(11, 0.0f, 10.0f, 0.00001, 1.0f, "shaper drive");
 
   inverseSampleRate = 1.0 / context->audioSampleRate;
 
@@ -274,9 +278,9 @@ void render(BelaContext *context, void *userData)
     rmsValue = sqrt(squareSum);
 
     //Envelope follower calculations
-    filteredAmplitude = filteredAmplitudeC * fabsf_neon(in_l) + (1 - filteredAmplitudeC) * filteredAmplitude;
+    // filteredAmplitude = filteredAmplitudeC * fabsf_neon(in_l) + (1 - filteredAmplitudeC) * filteredAmplitude;
 
-    float pitchedSample = interpolateFromRingBuffer(outputPointer, ringBuffer, ringBufferSize);
+    // float pitchedSample = interpolateFromRingBuffer(outputPointer, ringBuffer, ringBufferSize);
 
     float waveValue = osc.nextSample();
 
@@ -284,31 +288,31 @@ void render(BelaContext *context, void *userData)
 
     float pitchMix = scope.getSliderValue(1);
 
-    outputPointerSpeed = scope.getSliderValue(2);
+    // outputPointerSpeed = scope.getSliderValue(2);
 
-    float synthMix = scope.getSliderValue(3);
+    // float synthMix = scope.getSliderValue(3);
 
-    float synthPitch = scope.getSliderValue(4);
+    // float synthPitch = scope.getSliderValue(4);
 
-    osc.setMode(scope.getSliderValue(5));
+    // osc.setMode(scope.getSliderValue(5));
 
     // float tremoloPitch = scope.getSliderValue(5);
 
     // float tremoloMix = scope.getSliderValue(6);
 
-    float shaperType = scope.getSliderValue(10);
+    // float shaperType = scope.getSliderValue(10);
 
-    float shaperDrive = scope.getSliderValue(11);
+    // float shaperDrive = scope.getSliderValue(11);
 
-    waveshaper.setDrive(shaperDrive);
-    waveshaper.setShaperType(shaperType);
+    // waveshaper.setDrive(shaperDrive);
+    // waveshaper.setShaperType(shaperType);
 
-    combFilter.setFilterType(scope.getSliderValue(6));
-    float envToCutoff = scope.getSliderValue(9);
-    float cutoffModulation = rmsValue * envToCutoff * 5000.0 - envToCutoff * 5000.0;
-    float cutoff = scope.getSliderValue(7) + cutoffModulation;
-    combFilter.setCutoff(cutoff);
-    combFilter.setResonance(scope.getSliderValue(8));
+    // combFilter.setFilterType(scope.getSliderValue(6));
+    // float envToCutoff = scope.getSliderValue(9);
+    // float cutoffModulation = rmsValue * envToCutoff * 5000.0 - envToCutoff * 5000.0;
+    // float cutoff = scope.getSliderValue(7) + cutoffModulation;
+    // combFilter.setCutoff(cutoff);
+    // combFilter.setResonance(scope.getSliderValue(8));
     // osc.setFrequency(synthPitch * 220.0);
 
     // oscTargetAmplitude = amdf.frequencyEstimateScore;
@@ -335,15 +339,15 @@ void render(BelaContext *context, void *userData)
 
     float waveThreshold = 0.016;
     out_l = dryMix * in_l
-            //Noise for test purposes
-            // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) / static_cast<float>(RAND_MAX))
-            // just synth note for test
-            // + synthMix * waveValue
-            // + synthMix * max(rmsValue - waveThreshold, 0.0f) * waveValue
-            + synthMix * rmsValue * amdf.frequencyEstimateConfidence * waveValue
-            // + synthMix * filteredAmplitude * waveValue
-            // + synthMix * sinf_neon(pitchMix * in_l);
-            + pitchMix * pitchedSample
+        //Noise for test purposes
+        // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) / static_cast<float>(RAND_MAX))
+        // just synth note for test
+        // + synthMix * waveValue
+        // + synthMix * max(rmsValue - waveThreshold, 0.0f) * waveValue
+        // + synthMix * rmsValue * amdf.frequencyEstimateConfidence * waveValue
+        // + synthMix * filteredAmplitude * waveValue
+        // + synthMix * sinf_neon(pitchMix * in_l);
+        // + pitchMix * pitchedSample
         //delay
         // + 0.2f * audioDelay.getSample()
         ;
@@ -351,6 +355,18 @@ void render(BelaContext *context, void *userData)
     out_l = combFilter.process(out_l);
 
     out_l = waveshaper.process(out_l);
+
+    /// TESTING THE NEW PITCHSHIFTER
+    pitchShifter.setPitchRatio(scope.getSliderValue(2));
+    // pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
+    if ((int)scope.getSliderValue(6) == 1)
+    {
+      out_l = pitchShifter.process(in_l);
+    }
+    else
+    {
+      out_l = pitchShifter.PSOLA(in_l);
+    }
 
     //Apply tremolo/AM
     // out_l = out_l * (1.0 - tremoloSample);
@@ -361,14 +377,14 @@ void render(BelaContext *context, void *userData)
     //Increment all da pointers!!!!
     ++inputPointer %= ringBufferSize;
 
-    outputPointer += outputPointerSpeed;
-    outputPointer = wrapBufferSample(outputPointer, ringBufferSize);
+    // outputPointer += outputPointerSpeed;
+    // outputPointer = wrapBufferSample(outputPointer, ringBufferSize);
     //
     // jumpPulse -= 0.01;
     // jumpPulse = max(jumpPulse, 0.0f);
 
-    crossfadeValue -= crossFadeIncrement;
-    crossfadeValue = max(crossfadeValue, 0.0f);
+    // crossfadeValue -= crossFadeIncrement;
+    // crossfadeValue = max(crossfadeValue, 0.0f);
 
     if (!amdf.amdfIsDone)
     {
@@ -378,24 +394,30 @@ void render(BelaContext *context, void *userData)
         {
           // osc.setFrequency(0.5f *amdf.frequencyEstimate);
           frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
-          osc.setFrequency(synthPitch * 0.5f * frequency);
+          // osc.setFrequency(synthPitch * 0.5f * frequency);
         }
         amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer, ringBuffer, ringBufferSize);
-        scope.trigger();
+        // scope.trigger();
+
+        pitchShifter.setJumpLength(amdf.jumpValue);
       }
     }
-
-    int distanceBetweenInOut = wrapBufferSample(inputPointer - outputPointer, ringBufferSize);
-    if (distanceBetweenInOut > ringBufferSize / 4)
+    if (pitchShifter.hasJumped)
     {
-      fadingOutputPointerOffset = amdf.jumpValue; //We're gonna jump this far. so save the distance to be able to crossfade to were we are now.
-      outputPointer = wrapBufferSample(outputPointer + amdf.jumpValue, ringBufferSize);
-      // TODO: Better solution for avoiding divbyzero. Now we're using 1.1 to tackle that.
-      float pitchedSamplesUntilNewJump = (amdf.jumpValue / (1.1 - outputPointerSpeed));
-      crossFadeIncrement = 1.0f / pitchedSamplesUntilNewJump;
-      crossfadeValue = 1.0f;
-      // scope.trigger();
+      scope.trigger();
     }
+
+    // int distanceBetweenInOut = wrapBufferSample(inputPointer - (int)outputPointer, ringBufferSize);
+    // if (distanceBetweenInOut > ringBufferSize / 4)
+    // {
+    //   fadingOutputPointerOffset = amdf.jumpValue; //We're gonna jump this far. so save the distance to be able to crossfade to were we are now.
+    //   outputPointer = wrapBufferSample(outputPointer + amdf.jumpValue, ringBufferSize);
+    //   // TODO: Better solution for avoiding divbyzero. Now we're using 1.1 to tackle that.
+    //   float pitchedSamplesUntilNewJump = (amdf.jumpValue / (1.1 - outputPointerSpeed));
+    //   crossFadeIncrement = 1.0f / pitchedSamplesUntilNewJump;
+    //   crossfadeValue = 1.0f;
+    //   // scope.trigger();
+    // }
 
     // float outputPointerLocation = ((float)outputPointer) / ((float)ringBufferSize);
     // float inputPointerLocation = ((float)inputPointer) / ((float)ringBufferSize);
@@ -403,9 +425,15 @@ void render(BelaContext *context, void *userData)
     // tableIndex++;
     // tableIndex %= windowedSincTableSize;
     // float plottedSincTableValue = windowedSincTable[tableIndex];
-    // scope.log(in_l, out_l, 0.6 * (int)amdf.atTurnPoint, 10*amdf.weight, amdf.pitchtrackingAmdfScore);//, lowPassedRingBuffer[inputPointer]);
+    // float grainPlayheadRatio = (float)pitchShifter.activeGrain->playhead / ((float)pitchShifter.activeGrain->length * 2.0f + 0.1f);
+    // rt_printf("ratio: %f \t playhead: %i \t length: %i \n", grainPlayheadRatio, pitchShifter.activeGrain->playhead, pitchShifter.activeGrain->length);
+    scope.log(in_l, out_l,
+              pitchShifter.grains[0].playheadNormalized,
+              pitchShifter.grains[1].playheadNormalized,
+              pitchShifter.grains[2].playheadNormalized,
+              pitchShifter.tempCrossfade);
     // scope.log(in_l, rmsValue, filteredAmplitude, amdf.frequencyEstimateConfidence, 0.5);
-    scope.log(in_l, out_l);
+    // scope.log(in_l, out_l);
   }
   // rt_printf("magSum: %i, %i\n", ringBufferSize, amdf.bufferLength);
   // rt_printf("audio: %f, %f\n", in_l, out_l);

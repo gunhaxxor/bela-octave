@@ -8,6 +8,7 @@
 
 float normalizedSinc(float x);
 float getBlackman(float x, float M);
+float getBlackmanFast(float x, float M);
 void initializeWindowedSincTable();
 float interpolateFromRingBuffer(float index, float *ringBuffer, int ringBufferSize);
 

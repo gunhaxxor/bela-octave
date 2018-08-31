@@ -52,7 +52,7 @@ bool Amdf::updateAMDF()
   // This is to give smaller periods better "score" when detecting pitch.
   atTurnPoint = false; // This variable is used to identify local minimi points in the amdf score.
   pitchtrackingAmdfScore = amdfScore + weight;
-  if (currentSearchIndex % 5 == 0)
+  if (currentSearchIndex % jumpLengthBetweenTestedSamples == 0)
   {
     atTurnPoint = //previousPitchTrackingAmdfScores[1] > previousPitchTrackingAmdfScores[0]
         previousPitchTrackingAmdfScores[0] < pitchtrackingAmdfScore;

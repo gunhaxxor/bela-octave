@@ -4,6 +4,8 @@
 - [ ] Change effects order
 - [ ] Have separate signal paths
 - [x] Square wave osc
+- [ ] Portamento on Oscilator
+- [ ] Portamento on pitchshifters!!!! ????
 - [ ] Several pitch shifts
 - [ ] Pitch up (not only pitch down)
 - [ ] Make the synth (pitch) follower reliable
@@ -22,7 +24,8 @@
   - [ ] fractional delay
   - [ ] Smear (microdelays close to the tap)
   - [ ] Adjustable delaytime and feedback
-  - [ ] lfo modulated time?
+  - [ ] damping (lowpass) in feedback loop
+  - [ ] lfo modulated time
 - [ ] Reverb??
 - [ ] PSOLA, with adjustable formants
 - [ ] Waveshaper.

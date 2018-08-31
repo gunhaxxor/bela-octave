@@ -26,6 +26,12 @@ float getBlackman(float x, float M)
   return 0.42 - 0.5 * cos(2 * M_PI * x / M) + 0.08 * cos(4 * M_PI * x / M);
 }
 
+// NOTE: Not correctly defined in ranges outside M
+float getBlackmanFast(float x, float M)
+{
+  return 0.42 - 0.5 * cosf_neon(2 * M_PI * x / M) + 0.08 * cosf_neon(4 * M_PI * x / M);
+}
+
 void initializeWindowedSincTable()
 {
   float previousY = 0;
@@ -52,6 +58,7 @@ float interpolateFromRingBuffer(float index, float *ringBuffer, int ringBufferSi
   // First calculate the fractional so we know where to shift the sinc function.
   int integral;
   float fractional = modf_neon(index, &integral);
+  // What am I doing here? I don't remember and I don't understand it now... eh...
   int scaledFractional;
   float indexRatio = modf_neon(fractional * sincTableScaleFactor, &scaledFractional);
 
