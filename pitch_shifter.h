@@ -5,7 +5,9 @@
 #include <cmath>
 #include "utility.h"
 #include "sinc_interpolation.h"
+#undef NDEBUG
 #include <assert.h>
+#include <algorithm>
 
 class PitchShifter
 {
@@ -28,6 +30,7 @@ public:
 
   void setPitchRatio(float pitchRatio) { this->pitchRatio = fmin(1.0f, fmax(pitchRatio, 0.001f)); };
   void setJumpLength(int jumpLength) { this->jumpLength = jumpLength; };
+  void setPitchEstimatePeriod(float period){ this->pitchEstimatePeriod = (float) period;};
   void setInterpolationsMode(int mode) { this->interpolationMode = mode; };
   float process(float inSample);
   float PSOLA(float inSample);
@@ -36,6 +39,7 @@ public:
   // parameters
   float pitchRatio;
   int jumpLength = 1;
+  int pitchEstimatePeriod = 0;
   int interpolationMode = 0;
 
   // constructor-initialized variables
@@ -59,11 +63,14 @@ public:
   struct grain
   {
     // bool active;
-    int startIndex;
-    int endIndex;
-    int length;
-    int playhead;
-    float playheadNormalized;
+    int startIndex = 0;
+    int endIndex = 0;
+    int length = 1;
+    int pitchPeriod = 0;
+    int playhead = 0;
+    int activeCounter = 0;
+    float playheadNormalized = 0.0f;
+    float currentAmplitude = 0.0f;
   } grains[3];
 
   // grain *activeGrain = &grains[0];
@@ -75,6 +82,9 @@ public:
   grain *freeGrain = &grains[2];
   // TODO: Use a null pointer to safeguard a bit.
   // grain *freeGrain2 = 0;
+
+  float fadeInAmplitude = 0.0f;
+  float fadeOutAmplitude = 0.0f;
 
   //debug variables
   bool hasJumped = false;

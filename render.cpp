@@ -25,7 +25,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include <cmath>
 #include <math_neon.h>
 #include "utility.h"
-// #undef NDEBUG
+//Let's undefine this so we can get debug output!
+#undef NDEBUG
 #include <assert.h>
 
 #include "oscillator.h"
@@ -201,11 +202,11 @@ bool setup(BelaContext *context, void *userData)
   // highestTrackableNotePeriod = context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY;
   // ringBufferSize = lowestTrackableNotePeriod * 4;
 
-  scope.setup(5, context->audioSampleRate, 7);
+  scope.setup(8, context->audioSampleRate, 7);
   // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
   scope.setSlider(0, 0.0, 1.0, 0.00001, 0.5f, "dry mix");
   scope.setSlider(1, 0.0, 1.0, 0.00001, 0.0f, "pitch mix");
-  scope.setSlider(2, 0.25, 1.0, 0.00001, .5f, "pitch interval");
+  scope.setSlider(2, 0.25, 1.0, 0.00001, .25f, "pitch interval");
   scope.setSlider(3, 0.0, 1.0, 0.00001, 0.5f, "synth mix");
   scope.setSlider(4, 0.25, 2.0, 0.00001, 0.5f, "synth pitch");
   scope.setSlider(5, 0.0, 4.0, 1.0, 0.0f, "synth waveform");
@@ -400,6 +401,7 @@ void render(BelaContext *context, void *userData)
         // scope.trigger();
 
         pitchShifter.setJumpLength(amdf.jumpValue);
+        pitchShifter.setPitchEstimatePeriod(context->audioSampleRate / amdf.frequencyEstimate);
       }
     }
     if (pitchShifter.hasJumped)
@@ -425,13 +427,27 @@ void render(BelaContext *context, void *userData)
     // tableIndex++;
     // tableIndex %= windowedSincTableSize;
     // float plottedSincTableValue = windowedSincTable[tableIndex];
-    // float grainPlayheadRatio = (float)pitchShifter.activeGrain->playhead / ((float)pitchShifter.activeGrain->length * 2.0f + 0.1f);
-    // rt_printf("ratio: %f \t playhead: %i \t length: %i \n", grainPlayheadRatio, pitchShifter.activeGrain->playhead, pitchShifter.activeGrain->length);
-    scope.log(in_l, out_l,
+    // float grainPlayheadRatio = (float)pitchShifter.grains[0].playhead / ((float)pitchShifter.grains[0].length * 2.0f + 0.1f);
+    // rt_printf("ratio: %f \t playhead: %i \t length: %i \n", grainPlayheadRatio, pitchShifter.grains[0].playhead, pitchShifter.grains[0].length);
+    if(
+       pitchShifter.fadeInGrain == pitchShifter.fadeOutGrain
+    || pitchShifter.freeGrain == pitchShifter.fadeInGrain
+    || pitchShifter.freeGrain == pitchShifter.fadeOutGrain
+    ){
+      // rt_printf("assertion failed!!");
+    }
+
+    scope.log(
+              in_l, out_l,
               pitchShifter.grains[0].playheadNormalized,
               pitchShifter.grains[1].playheadNormalized,
               pitchShifter.grains[2].playheadNormalized,
-              pitchShifter.tempCrossfade);
+              pitchShifter.grains[0].currentAmplitude,
+              pitchShifter.grains[1].currentAmplitude,
+              pitchShifter.grains[2].currentAmplitude
+              // pitchShifter.fadeInAmplitude,
+              // pitchShifter.fadeOutAmplitude
+              );
     // scope.log(in_l, rmsValue, filteredAmplitude, amdf.frequencyEstimateConfidence, 0.5);
     // scope.log(in_l, out_l);
   }

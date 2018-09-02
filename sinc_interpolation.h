@@ -4,6 +4,7 @@
 #include <math_neon.h>
 #include <cmath>
 #include "utility.h"
+#undef NDEBUG
 #include <assert.h>
 
 float normalizedSinc(float x);
