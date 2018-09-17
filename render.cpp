@@ -222,7 +222,7 @@ bool setup(BelaContext *context, void *userData)
   initializeWindowedSincTable();
 
   amdf.setup(context->audioSampleRate);
-  amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer, ringBuffer, ringBufferSize);
+  amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
   return true;
 }
 
@@ -387,24 +387,23 @@ void render(BelaContext *context, void *userData)
 
     // crossfadeValue -= crossFadeIncrement;
     // crossfadeValue = max(crossfadeValue, 0.0f);
-
-    if (!amdf.amdfIsDone)
+    amdf.process(in_l);
+    if (amdf.amdfIsDone)
     {
-      if (amdf.updateAMDF())
+      if (amdf.frequencyEstimate < highestTrackableFrequency)
       {
-        if (amdf.frequencyEstimate < highestTrackableFrequency)
-        {
-          // osc.setFrequency(0.5f *amdf.frequencyEstimate);
-          frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
-          // osc.setFrequency(synthPitch * 0.5f * frequency);
-        }
-        amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer, ringBuffer, ringBufferSize);
-        // scope.trigger();
-
-        pitchShifter.setJumpLength(amdf.jumpValue);
-        pitchShifter.setPitchEstimatePeriod(context->audioSampleRate / amdf.frequencyEstimate);
+        // osc.setFrequency(0.5f *amdf.frequencyEstimate);
+        frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
+        // osc.setFrequency(synthPitch * 0.5f * frequency);
       }
+      ////Parameters: (Search area start position, compare area end position)
+      amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
+      // scope.trigger();
+
+      pitchShifter.setJumpLength(amdf.jumpValue);
+      pitchShifter.setPitchEstimatePeriod(context->audioSampleRate / amdf.frequencyEstimate);
     }
+
     if (pitchShifter.hasJumped)
     {
       scope.trigger();

@@ -8,6 +8,7 @@
 #undef NDEBUG
 #include <assert.h>
 #include <algorithm>
+#include "filter.h"
 
 class PitchShifter
 {

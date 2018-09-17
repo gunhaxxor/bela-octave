@@ -4,38 +4,47 @@
 // #include "utility.h"
 
 //TODO: Find the places where we actually have to do ringbuffer wrap. Should avoid it where not necessary.
-void Amdf::initiateAMDF(int searchIndexStart, int compareIndexStart, float *sampleBuffer, int bufferLength)
+void Amdf::initiateAMDF(int searchIndexStart, int compareIndexEnd) //, float *sampleBuffer, int bufferLength)
 {
-  this->sampleBuffer = sampleBuffer;
-  this->bufferLength = bufferLength;
+  // this->sampleBuffer = sampleBuffer;
+  // this->bufferLength = bufferLength;
 
   bestSoFar = pitchtrackingBestSoFar = 10000000.0f;
   weight = this->maxWeight;
   previousPitchTrackingAmdfScores[0] = 10000000.0f;
   // this->searchIndexStart = searchIndexStart;
   // searchIndexStop = searchIndexStart + searchWindowSize;
-  this->searchIndexStart = (searchIndexStart - correlationWindowSize);
+  this->searchIndexStart = searchIndexStart - correlationWindowSize;
   searchIndexStop = this->searchIndexStart + searchWindowSize;
 
   //initiate outer loop
   currentSearchIndex = this->searchIndexStart;
 
   //initiate inner loop
-  this->compareIndexStart = compareIndexStart - correlationWindowSize;
-  compareIndexStop = compareIndexStart;
+  this->compareIndexStart = compareIndexEnd - correlationWindowSize;
+  this->compareIndexStop = compareIndexStart;
   amdfIsDone = false;
 }
 
-bool Amdf::updateAMDF()
+void Amdf::process(float inSample)
 {
-  amdfScore = pitchtrackingAmdfScore = 0;
+  //handle da buffers and input pointer.
+  this->inputRingBuffer[inputPointer] = inSample;
+  this->lowPassedRingBuffer[inputPointer] = lopass.process(inSample);
+  ++inputPointer %= this->bufferLength;
+
+  if(amdfIsDone){
+    return;
+  }
+
+  amdfScore = pitchtrackingAmdfScore = 0; // initialize before running the summation
   for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex += jumpLengthBetweenTestedSamples, i += jumpLengthBetweenTestedSamples)
   {
     // int k = (currentCompareIndex + bufferLength) % bufferLength;
     int k = wrapBufferSample(currentCompareIndex, bufferLength);
     // int km = (currentSearchIndex + i + bufferLength) % bufferLength;
     int km = wrapBufferSample(currentSearchIndex + i, bufferLength);
-    amdfScore += fabsf_neon(sampleBuffer[km] - sampleBuffer[k]);
+    amdfScore += fabsf_neon(inputRingBuffer[km] - inputRingBuffer[k]);
   }
   amdfScore /= nrOfTestedSamplesInCorrelationWindow;
   if (amdfScore <= bestSoFar)
@@ -89,14 +98,12 @@ bool Amdf::updateAMDF()
 
     //this->jumpDifference = filter_C * std::abs(this->jumpValue - bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
     float newFreqEstimate = (this->sampleRate / pitchtrackingBestIndexJump);
-    float average_C = 0.1;
+    float average_C = 0.3;
     frequencyEstimateAveraged = average_C * newFreqEstimate + (1.0f - average_C) * frequencyEstimateAveraged;
 
     // float newPitchEstimate = 69 + 12 * logf_neon(newFreqEstimate/440.0f) * this->inverseLog_2;
     float newPitchEstimate = 0.5 * logf_neon(newFreqEstimate / 440.0f) * this->inverseLog_2;
     // pitchEstimateAveraged = average_C * newPitchEstimate + (1.0f - average_C) * pitchEstimateAveraged;
-
-    // float ratio = newFreqEstimate / frequencyEstimateAveraged;
 
     float ratio = newFreqEstimate / this->previousFrequencyEstimate;
     float semiTones = logf_neon(ratio) * this->inverseLog_2;
@@ -120,14 +127,15 @@ bool Amdf::updateAMDF()
     // }
 
     float estimate_C = 0.3f;
-    this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 - estimate_C) * this->frequencyEstimate;
+    // this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 - estimate_C) * this->frequencyEstimate;
+    this->frequencyEstimate = newFreqEstimate;
     this->pitchEstimate = estimate_C * newPitchEstimate + (1.0 - estimate_C) * this->pitchEstimate;
   }
 
   currentSearchIndex++;
   // weight -= weightIncrement;
 
-  return amdfIsDone;
+  // return amdfIsDone;
   // return bestSoFarIndex;
 }
 
