@@ -21,6 +21,7 @@ public:
     this->highestTrackableNotePeriod = sampleRate / highestTrackableFrequency;
     this->inputRingBufferSize = lowestTrackableNotePeriod * 16;
     this->inputRingBuffer = new float[inputRingBufferSize];
+    // this->lowPassedRingBuffer = new float[inputRingBufferSize];
 
     this->maxSampleDelay = lowestTrackableNotePeriod * 2;
     this->jumpLength = maxSampleDelay; // just a default value if we don't provide continuous period length tracking
@@ -50,6 +51,7 @@ public:
   float highestTrackableNotePeriod;
   int inputRingBufferSize;
   float *inputRingBuffer;
+  // float *lowPassedRingBuffer;
   int maxSampleDelay;
 
   //completely internal variables
@@ -58,6 +60,7 @@ public:
   int fadingPointerOffset = 0;
   float crossfadeValue = 1.0;
   float crossfadeIncrement = 0;
+  float crossfadeTime = 0.0f;
 
   //PSOLA
   struct grain

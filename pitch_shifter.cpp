@@ -4,6 +4,7 @@ float PitchShifter::process(float inSample)
 {
   hasJumped = false;
   inputRingBuffer[inputPointer] = inSample;
+  // lowPassedRingBuffer = 
   float fadingOutPointer = wrapBufferSample(outputPointer - fadingPointerOffset, inputRingBufferSize);
 
   float fadingInSample, fadingOutSample;
@@ -77,6 +78,7 @@ float PitchShifter::PSOLA(float inSample)
       fadeOutGrain = fadeInGrain;
       fadeInGrain = newestGrain;
       fadeInGrain->playhead = 0;
+      fadeInGrain->activeCounter = 0;
 
       // crossfadeValue = 0.0f;
       // crossfadeIncrement = 1.0f / (fadeInGrain->length);
@@ -96,13 +98,15 @@ float PitchShifter::PSOLA(float inSample)
       fadeInGrain->playhead = 0;
       fadeInGrain->activeCounter = 0;
 
-      crossfadeValue = 0.0f;
-      crossfadeIncrement = 1.0f / (fadeInGrain->length);
+      // crossfadeValue = 0.0f;
+      // crossfadeIncrement = 1.0f / (fadeInGrain->length);
     }
 
     // crossfadeValue = -1.0f;
     // int grainLength = wrapBufferSample(activeGrain->endIndex - activeGrain->startIndex, inputRingBufferSize);
     // crossfadeIncrement = 2.0f / activeGrain->length;
+
+    crossfadeTime = -1.0f;
 
     // samplesUntilNewGrain = activeGrain->length;
 
@@ -113,20 +117,27 @@ float PitchShifter::PSOLA(float inSample)
 
   //TODO: Actually allow creation of a new grain as soon as we can be certain it's playback will not overtake inputPointer.
   // will be related to formant (playbackspeed of grains) and grainsize.
-
-  TODO: actually create grains that are have their center pitchperiod samples apart from each other (will mean overlap).
-  So if they are 2 x pitchperiod, it would be two grains always overlapping.
-
-  TODO: equal power hann crossfade instead of windowing for each grain.
+  
+  // TODO: constant power (or constant voltage) hann crossfade instead of windowing for each grain.
 
   // create new grain
-  int possibleGrainSize = wrapBufferSample(inputPointer - newestGrain->endIndex, inputRingBufferSize);
-  int actualGrainSize = pitchEstimatePeriod * 4;
-  if (possibleGrainSize >= actualGrainSize)
+  // int possibleGrainSize = wrapBufferSample(inputPointer - newestGrain->endIndex, inputRingBufferSize);
+  // int grainSize = pitchEstimatePeriod * 4;
+
+  // Let's actually create grains that have their center pitchperiod samples apart from each other (will mean overlap).
+  // So if their length 2 x pitchperiod, there would be two grains always overlapping.
+  int distanceFromLastGrain = wrapBufferSample(inputPointer - newestGrain->startIndex, inputRingBufferSize);
+  int grainSize = pitchEstimatePeriod*2.0f;
+  if (distanceFromLastGrain >= grainSize)
   {
-    int startIndex = newestGrain->endIndex;
-    int length = actualGrainSize;
+    // int startIndex = newestGrain->endIndex;
+    // int length = actualGrainSize;
+    // int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
+
+    int startIndex = wrapBufferSample(newestGrain->startIndex + grainSize, inputRingBufferSize);
+    int length = grainSize;
     int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
+
     newestGrain = freeGrain;
     newestGrain->startIndex = startIndex;
     newestGrain->endIndex = endIndex;
@@ -146,9 +157,9 @@ float PitchShifter::PSOLA(float inSample)
   assert(freeGrain != fadeInGrain);
 
 
-  crossfadeValue += crossfadeIncrement;
-  crossfadeValue = fmin(1.0f, crossfadeValue);
-  tempCrossfade = fmax(0.0f, (1.0 - fabsf_neon(crossfadeValue)));
+  // crossfadeValue += crossfadeIncrement;
+  // crossfadeValue = fmin(1.0f, crossfadeValue);
+  // tempCrossfade = fmax(0.0f, (1.0 - fabsf_neon(crossfadeValue)));
 
   // tempCrossfade = getBlackmanFast(activeGrain->playhead, activeGrain->length);
 
@@ -160,14 +171,12 @@ float PitchShifter::PSOLA(float inSample)
 
   // outputPointer = wrapBufferSample(activeGrain->startIndex + activeGrain->playhead, inputRingBufferSize);
   float fadeOutSample = inputRingBuffer[wrapBufferSample(fadeOutGrain->startIndex + fadeOutGrain->playhead, inputRingBufferSize)];
-  // fadeOutAmplitude = getBlackmanFast(fadeOutGrain->playhead, fadeOutGrain->length);
+  // fadeOutAmplitude = 
   float fadeInSample = inputRingBuffer[wrapBufferSample(fadeInGrain->startIndex + fadeInGrain->playhead, inputRingBufferSize)];
-  // fadeInAmplitude = getBlackmanFast(fadeInGrain->playhead, fadeInGrain->length);
+  // 
 
   // float combinedSample = tempCrossfade * inputRingBuffer[(int)outputPointer];
-  float combinedSample = fadeInGrain->currentAmplitude * fadeInSample + fadeOutGrain->currentAmplitude * fadeOutSample;
-
-  ++inputPointer %= inputRingBufferSize;
+  
   // outputPointer++;
   // outputPointer = wrapBufferSample(outputPointer, inputRingBufferSize);
   // samplesUntilNewGrain--;
@@ -176,12 +185,21 @@ float PitchShifter::PSOLA(float inSample)
   // fadeInGrain->playheadNormalized = (float)fadeInGrain->playhead / ((float)fadeInGrain->length * 2);
   fadeInGrain->playhead++;
   fadeInGrain->activeCounter++;
+  // fadeInGrain->currentAmplitude = hannCrossFade(crossfadeTime);
+  fadeInGrain->currentAmplitude = getBlackmanFast(fadeInGrain->playhead, fadeInGrain->length);
   // fadeInGrain->playhead =(int) fmin((float)fadeInGrain->playhead, (float)fadeInGrain->length);
   
   // fadeOutGrain->playheadNormalized = (float)fadeOutGrain->playhead / ((float)fadeOutGrain->length * 2);
   fadeOutGrain->playhead++;
   fadeOutGrain->activeCounter++;
+  // fadeOutGrain->currentAmplitude = hannCrossFade(-crossfadeTime);
+  fadeOutGrain->currentAmplitude = getBlackmanFast(fadeOutGrain->playhead, fadeOutGrain->length);
   // fadeOutGrain->playhead =(int) fmin((float) fadeOutGrain->playhead, (float)fadeOutGrain->length);
+
+  float combinedSample = fadeInGrain->currentAmplitude * fadeInSample + fadeOutGrain->currentAmplitude * fadeOutSample;
+
+  crossfadeTime += 1.0f / 10;
+  ++inputPointer %= inputRingBufferSize;
 
   //update the grains
   for(int i = 0; i < 3; i++)
@@ -189,7 +207,7 @@ float PitchShifter::PSOLA(float inSample)
     // grains[i].playhead++;
     // grains[i].activeCounter++;
     grains[i].playhead = std::min(grains[i].playhead, grains[i].length);
-    grains[i].currentAmplitude = getBlackmanFast(grains[i].playhead, grains[i].length);
+    // grains[i].currentAmplitude = getBlackmanFast(grains[i].playhead, grains[i].length);
     grains[i].playheadNormalized = (float) grains[i].playhead / (grains[i].length * 2);
   }
 

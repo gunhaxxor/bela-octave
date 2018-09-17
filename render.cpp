@@ -337,6 +337,19 @@ void render(BelaContext *context, void *userData)
     // }
     // float tremoloSample = sinf_neon(phase);
     // tremoloSample = 0.5f * (tremoloSample + 1) * tremoloMix;
+    
+    /// TESTING THE NEW PITCHSHIFTER
+    pitchShifter.setPitchRatio(scope.getSliderValue(2));
+    // pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
+    float pitchedSample;
+    if ((int)scope.getSliderValue(6) == 1)
+    {
+      pitchedSample = pitchShifter.process(in_l);
+    }
+    else
+    {
+      pitchedSample = pitchShifter.PSOLA(in_l);
+    }
 
     float waveThreshold = 0.016;
     out_l = dryMix * in_l
@@ -348,7 +361,7 @@ void render(BelaContext *context, void *userData)
         // + synthMix * rmsValue * amdf.frequencyEstimateConfidence * waveValue
         // + synthMix * filteredAmplitude * waveValue
         // + synthMix * sinf_neon(pitchMix * in_l);
-        // + pitchMix * pitchedSample
+        + pitchMix * pitchedSample
         //delay
         // + 0.2f * audioDelay.getSample()
         ;
@@ -356,18 +369,6 @@ void render(BelaContext *context, void *userData)
     out_l = combFilter.process(out_l);
 
     out_l = waveshaper.process(out_l);
-
-    /// TESTING THE NEW PITCHSHIFTER
-    pitchShifter.setPitchRatio(scope.getSliderValue(2));
-    // pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
-    if ((int)scope.getSliderValue(6) == 1)
-    {
-      out_l = pitchShifter.process(in_l);
-    }
-    else
-    {
-      out_l = pitchShifter.PSOLA(in_l);
-    }
 
     //Apply tremolo/AM
     // out_l = out_l * (1.0 - tremoloSample);
