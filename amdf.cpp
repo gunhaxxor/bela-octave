@@ -4,26 +4,33 @@
 // #include "utility.h"
 
 //TODO: Find the places where we actually have to do ringbuffer wrap. Should avoid it where not necessary.
-void Amdf::initiateAMDF(int searchIndexStart, int compareIndexEnd) //, float *sampleBuffer, int bufferLength)
+// void Amdf::initiateAMDF(int searchIndexStart, int compareIndexEnd) //, float *sampleBuffer, int bufferLength)
+void Amdf::initiateAMDF()
 {
   // this->sampleBuffer = sampleBuffer;
   // this->bufferLength = bufferLength;
 
+
   bestSoFar = pitchtrackingBestSoFar = 10000000.0f;
   weight = this->maxWeight;
   previousPitchTrackingAmdfScores[0] = 10000000.0f;
-  // this->searchIndexStart = searchIndexStart;
-  // searchIndexStop = searchIndexStart + searchWindowSize;
-  this->searchIndexStart = searchIndexStart - correlationWindowSize;
+  this->amdfScore = 0.0f;
+
+  this->searchIndexStart = (inputPointer - this->lowestTrackableNotePeriod) - correlationWindowSize;
   searchIndexStop = this->searchIndexStart + searchWindowSize;
 
   //initiate outer loop
   currentSearchIndex = this->searchIndexStart;
 
-  //initiate inner loop
-  this->compareIndexStart = compareIndexEnd - correlationWindowSize;
-  this->compareIndexStop = compareIndexStart;
+  // initiate inner loop
+  // we allow loop boundaries to be negative values. We only wrap when actually fetching the samples from the ringbuffer.
+  // Thus it's safe to compare indices for when to finish the loop.
+  this->compareIndexStart = inputPointer - correlationWindowSize;
+  this->compareIndexStop = inputPointer;
   amdfIsDone = false;
+
+  this->requiredCyclesToComplete =  searchWindowSize;
+  this->progress = 0.0f;
 }
 
 void Amdf::process(float inSample)
@@ -33,20 +40,22 @@ void Amdf::process(float inSample)
   this->lowPassedRingBuffer[inputPointer] = lopass.process(inSample);
   ++inputPointer %= this->bufferLength;
 
+  this->inputPointerProgress = (float) this->inputPointer / (float)this->bufferLength;
+
   if(amdfIsDone){
     return;
   }
 
-  amdfScore = pitchtrackingAmdfScore = 0; // initialize before running the summation
+  this->amdfScore = pitchtrackingAmdfScore = 0.0f; // initialize before running the summation
+  nrOfTestedSamplesInCorrelationWindow = 0.0f;
   for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex += jumpLengthBetweenTestedSamples, i += jumpLengthBetweenTestedSamples)
   {
-    // int k = (currentCompareIndex + bufferLength) % bufferLength;
     int k = wrapBufferSample(currentCompareIndex, bufferLength);
-    // int km = (currentSearchIndex + i + bufferLength) % bufferLength;
     int km = wrapBufferSample(currentSearchIndex + i, bufferLength);
     amdfScore += fabsf_neon(inputRingBuffer[km] - inputRingBuffer[k]);
+    nrOfTestedSamplesInCorrelationWindow+= 1.0;
   }
-  amdfScore /= nrOfTestedSamplesInCorrelationWindow;
+  this->amdfScore /= nrOfTestedSamplesInCorrelationWindow;
   if (amdfScore <= bestSoFar)
   {
     bestSoFar = amdfScore;
@@ -84,6 +93,7 @@ void Amdf::process(float inSample)
   else
   {
   }
+
   if (currentSearchIndex < searchIndexStop)
   {
     amdfIsDone = false;
@@ -133,6 +143,8 @@ void Amdf::process(float inSample)
   }
 
   currentSearchIndex++;
+
+  this->progress = (float)(currentSearchIndex - searchIndexStart) / (float) this->requiredCyclesToComplete;
   // weight -= weightIncrement;
 
   // return amdfIsDone;

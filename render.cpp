@@ -222,7 +222,8 @@ bool setup(BelaContext *context, void *userData)
   initializeWindowedSincTable();
 
   amdf.setup(context->audioSampleRate);
-  amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
+  // amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
+  amdf.initiateAMDF();
   return true;
 }
 
@@ -388,6 +389,12 @@ void render(BelaContext *context, void *userData)
     // crossfadeValue -= crossFadeIncrement;
     // crossfadeValue = max(crossfadeValue, 0.0f);
     amdf.process(in_l);
+    scope.log(
+      in_l,
+      amdf.amdfScore,
+      amdf.progress,
+      amdf.inputPointerProgress
+    );
     if (amdf.amdfIsDone)
     {
       if (amdf.frequencyEstimate < highestTrackableFrequency)
@@ -397,8 +404,13 @@ void render(BelaContext *context, void *userData)
         // osc.setFrequency(synthPitch * 0.5f * frequency);
       }
       ////Parameters: (Search area start position, compare area end position)
-      amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
-      // scope.trigger();
+      // amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
+      amdf.initiateAMDF();
+      // rt_printf("nrOftestedSample: %f,     ", amdf.nrOfTestedSamplesInCorrelationWindow);
+      // rt_printf("correlationWindowSize: %i,     ", amdf.correlationWindowSize);
+      // rt_printf("searchWindowSize: %i,     ", amdf.searchWindowSize);
+      // rt_printf("amdfScore: %f \n", amdf.amdfScore);
+      scope.trigger();
 
       pitchShifter.setJumpLength(amdf.jumpValue);
       pitchShifter.setPitchEstimatePeriod(context->audioSampleRate / amdf.frequencyEstimate);
@@ -406,7 +418,7 @@ void render(BelaContext *context, void *userData)
 
     if (pitchShifter.hasJumped)
     {
-      scope.trigger();
+      // scope.trigger();
     }
 
     // int distanceBetweenInOut = wrapBufferSample(inputPointer - (int)outputPointer, ringBufferSize);
@@ -429,25 +441,25 @@ void render(BelaContext *context, void *userData)
     // float plottedSincTableValue = windowedSincTable[tableIndex];
     // float grainPlayheadRatio = (float)pitchShifter.grains[0].playhead / ((float)pitchShifter.grains[0].length * 2.0f + 0.1f);
     // rt_printf("ratio: %f \t playhead: %i \t length: %i \n", grainPlayheadRatio, pitchShifter.grains[0].playhead, pitchShifter.grains[0].length);
-    if(
-       pitchShifter.fadeInGrain == pitchShifter.fadeOutGrain
-    || pitchShifter.freeGrain == pitchShifter.fadeInGrain
-    || pitchShifter.freeGrain == pitchShifter.fadeOutGrain
-    ){
-      // rt_printf("assertion failed!!");
-    }
+    // if(
+    //    pitchShifter.fadeInGrain == pitchShifter.fadeOutGrain
+    // || pitchShifter.freeGrain == pitchShifter.fadeInGrain
+    // || pitchShifter.freeGrain == pitchShifter.fadeOutGrain
+    // ){
+    //   // rt_printf("assertion failed!!");
+    // }
 
-    scope.log(
-              in_l, out_l,
-              pitchShifter.grains[0].playheadNormalized,
-              pitchShifter.grains[1].playheadNormalized,
-              pitchShifter.grains[2].playheadNormalized,
-              pitchShifter.grains[0].currentAmplitude,
-              pitchShifter.grains[1].currentAmplitude,
-              pitchShifter.grains[2].currentAmplitude
-              // pitchShifter.fadeInAmplitude,
-              // pitchShifter.fadeOutAmplitude
-              );
+    // scope.log(
+    //           in_l, out_l,
+    //           pitchShifter.grains[0].playheadNormalized,
+    //           pitchShifter.grains[1].playheadNormalized,
+    //           pitchShifter.grains[2].playheadNormalized,
+    //           pitchShifter.grains[0].currentAmplitude,
+    //           pitchShifter.grains[1].currentAmplitude,
+    //           pitchShifter.grains[2].currentAmplitude
+    //           // pitchShifter.fadeInAmplitude,
+    //           // pitchShifter.fadeOutAmplitude
+    //           );
     // scope.log(in_l, rmsValue, filteredAmplitude, amdf.frequencyEstimateConfidence, 0.5);
     // scope.log(in_l, out_l);
   }

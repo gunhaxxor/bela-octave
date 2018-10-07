@@ -25,13 +25,16 @@ public:
 
   //debug
   bool minimiPoint = false;
+  int requiredCyclesToComplete = 0;
+  float progress = 0.0f;
+  float inputPointerProgress = 0.0f;
 
   Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal)
   {
     correlationWindowSize = longestExpectedPeriodOfSignal * amdf_C;
-    // searchWindowSize = longestExpectedPeriodOfSignal - correlationWindowSize;
-    searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal; // - correlationWindowSize;
-    nrOfTestedSamplesInCorrelationWindow = correlationWindowSize / jumpLengthBetweenTestedSamples;
+    searchWindowSize = longestExpectedPeriodOfSignal - correlationWindowSize;
+    // searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal; // - correlationWindowSize;
+    nrOfTestedSamplesInCorrelationWindow = (float) correlationWindowSize / jumpLengthBetweenTestedSamples;
 
     weightIncrement = maxWeight / searchWindowSize;
 
@@ -51,7 +54,8 @@ public:
     lopass.setCutoff(this->sampleRate / highestTrackableNotePeriod);
     lopass.setResonance(3.0);
   }
-  void initiateAMDF(int searchIndexStart, int compareIndexStart);//, float *sampleBuffer, int bufferLength);
+  // void initiateAMDF(int searchIndexStart, int compareIndexStart);//, float *sampleBuffer, int bufferLength);
+  void initiateAMDF();
   void process(float inSample);
 
   // private:
@@ -59,7 +63,7 @@ public:
   float highestTrackableNotePeriod;
   // int inputRingBufferSize;
   int bufferLength;
-  int inputPointer;
+  int inputPointer = 0;
   float *inputRingBuffer;
   float *lowPassedRingBuffer;
   const float amdf_C = 2.0 / 8.0;
