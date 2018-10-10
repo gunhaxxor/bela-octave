@@ -390,10 +390,16 @@ void render(BelaContext *context, void *userData)
     // crossfadeValue = max(crossfadeValue, 0.0f);
     amdf.process(in_l);
     scope.log(
+      // amdf.normalizedInSample,
       in_l,
+      // amdf.rmsValue,
+      // rmsValue
       amdf.amdfScore,
       amdf.progress,
-      amdf.inputPointerProgress
+      amdf.inputPointerProgress,
+      amdf.pitchtrackingAmdfScore,
+      amdf.pitchEstimateReady,
+      amdf.weight
     );
     if (amdf.amdfIsDone)
     {
@@ -410,6 +416,8 @@ void render(BelaContext *context, void *userData)
       // rt_printf("correlationWindowSize: %i,     ", amdf.correlationWindowSize);
       // rt_printf("searchWindowSize: %i,     ", amdf.searchWindowSize);
       // rt_printf("amdfScore: %f \n", amdf.amdfScore);
+
+      // rt_printf("squareSum: %f \t rms: %f \n", amdf.squareSum, amdf.rmsValue);
       scope.trigger();
 
       pitchShifter.setJumpLength(amdf.jumpValue);

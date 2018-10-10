@@ -21,31 +21,50 @@ public:
 
   float pitchtrackingAmdfScore;
   float previousPitchTrackingAmdfScores[2] = {5.0, 5.0};
-  bool atTurnPoint = false;
+  bool atLocalMinimi = false;
 
   //debug
   bool minimiPoint = false;
   int requiredCyclesToComplete = 0;
   float progress = 0.0f;
   float inputPointerProgress = 0.0f;
+  float pitchEstimateReady = 0.0f;
 
   Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal)
   {
     correlationWindowSize = longestExpectedPeriodOfSignal * amdf_C;
-    searchWindowSize = longestExpectedPeriodOfSignal - correlationWindowSize;
+    
+    //The paper states this is the proper searchWindowSize:
+    // searchWindowSize = longestExpectedPeriodOfSignal - correlationWindowSize;
+
+    //But me intuition tells me we want to test jumplengths from shortestExpectedPeriodOfSignal to longestExpectedPeriodOfSignal
+    this->searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal;
     // searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal; // - correlationWindowSize;
-    nrOfTestedSamplesInCorrelationWindow = (float) correlationWindowSize / jumpLengthBetweenTestedSamples;
+    // nrOfTestedSamplesInCorrelationWindow = (float) correlationWindowSize / jumpLengthBetweenTestedSamples;
 
     weightIncrement = maxWeight / searchWindowSize;
 
     // this->inputRingBufferSize = lowestTrackableNotePeriod * 8;
     this->bufferLength = longestExpectedPeriodOfSignal * 8.0;
     this->inputRingBuffer = new float[this->bufferLength];
+    this->normalizedRingBuffer = new float[this->bufferLength];
     this->lowPassedRingBuffer = new float[this->bufferLength];
     this->lowestTrackableNotePeriod = longestExpectedPeriodOfSignal;
     this->highestTrackableNotePeriod = shortestExpectedPeriodOfSignal;
-
     
+    for(int i = 0; i < bufferLength; i++)
+    {
+      this->inputRingBuffer[i] = 0.0f; 
+      this->normalizedRingBuffer[i] = 0.0f;
+      this->lowPassedRingBuffer[i] = 0.0f; 
+    }
+
+    this->squareSumSamplesSize = lowestTrackableNotePeriod * 2;
+    this->squareSumSamples = new float[squareSumSamplesSize];
+    for(int i = 0; i < squareSumSamplesSize; i++)
+    {
+      this->squareSumSamples[i] = 0.0f;
+    }
   }
 
   void setup(int sampleRate)
@@ -59,12 +78,13 @@ public:
   void process(float inSample);
 
   // private:
-  float lowestTrackableNotePeriod;
-  float highestTrackableNotePeriod;
+  int lowestTrackableNotePeriod;
+  int highestTrackableNotePeriod;
   // int inputRingBufferSize;
   int bufferLength;
   int inputPointer = 0;
   float *inputRingBuffer;
+  float *normalizedRingBuffer;
   float *lowPassedRingBuffer;
   const float amdf_C = 2.0 / 8.0;
   const int jumpLengthBetweenTestedSamples = 5;
@@ -74,6 +94,13 @@ public:
   float weightIncrement;
   float filter_C = 0.5;
   Filter lopass = Filter(44100, Filter::LOPASSRES);
+
+  float *squareSumSamples;
+  int squareSumSamplesSize;
+  int squareSumSamplesIndex;
+  float squareSum = 0.0f;
+  float rmsValue = 0.0f;
+  float normalizedInSample = 0;
 
   float amdfScore; // low value means good correlation. high value means big difference between the compared windows
   float bestSoFar;
@@ -89,7 +116,7 @@ public:
   float pitchtrackingBestIndexJump;
 
   int correlationWindowSize;
-  float nrOfTestedSamplesInCorrelationWindow;
+  int nrOfTestedSamplesInCorrelationWindow;
   int searchWindowSize;
 
   int currentSearchIndex;
