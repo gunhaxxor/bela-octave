@@ -10,7 +10,6 @@ class Amdf
 {
 public:
   int jumpValue;
-  int previousJumpValue;
 
   float pitchEstimate;
   float frequencyEstimate;
@@ -28,7 +27,7 @@ public:
   int requiredCyclesToComplete = 0;
   float progress = 0.0f;
   float inputPointerProgress = 0.0f;
-  float pitchEstimateReady = 0.0f;
+  bool pitchEstimateReady = false;
 
   Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal)
   {
@@ -116,7 +115,6 @@ public:
   float pitchtrackingBestIndexJump;
 
   int correlationWindowSize;
-  int nrOfTestedSamplesInCorrelationWindow;
   int searchWindowSize;
 
   int currentSearchIndex;

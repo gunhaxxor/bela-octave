@@ -21,14 +21,21 @@ float normalizedSinc(float x)
   return sin(x) / x; // will be used when building sinctable, so we want to use the best sin function.
 }
 
+// returns zero for values outside the window
 float getBlackman(float x, float M)
 {
+  if(x < 0.0f || x > M){
+    return 0.0f;
+  }
   return 0.42 - 0.5 * cos(2 * M_PI * x / M) + 0.08 * cos(4 * M_PI * x / M);
 }
 
-// NOTE: Not correctly defined in ranges outside M
+// returns zero for values outside the window
 float getBlackmanFast(float x, float M)
 {
+  if(x < 0.0f || x > M){
+    return 0.0f;
+  }
   return 0.42 - 0.5 * cosf_neon(2 * M_PI * x / M) + 0.08 * cosf_neon(4 * M_PI * x / M);
 }
 

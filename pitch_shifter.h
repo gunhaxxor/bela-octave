@@ -28,6 +28,10 @@ public:
     this->jumpLength = maxSampleDelay; // just a default value if we don't provide continuous period length tracking
 
     this->pitchRatio = pitchRatio;
+
+
+    //PSOLA stuff
+    // latestStartedGrain->isPlaying = true;
   };
 
   void setPitchRatio(float pitchRatio) { this->pitchRatio = fmin(1.0f, fmax(pitchRatio, 0.001f)); };
@@ -42,7 +46,7 @@ public:
   float pitchRatio;
   int jumpLength = 1;
   int pitchEstimatePeriod = 0;
-  int interpolationMode = 0;
+  int interpolationMode = 1;
 
   // constructor-initialized variables
   float sampleRate;
@@ -59,11 +63,12 @@ public:
   int inputPointer = 0;
   float outputPointer = 0.0f;
   int fadingPointerOffset = 0;
-  float crossfadeValue = 1.0;
+  float crossfadeValue = 0.0;
   float crossfadeIncrement = 0;
   float crossfadeTime = 0.0f;
 
   //PSOLA
+  static const int nrOfGrains = 8;
   struct grain
   {
     // bool active;
@@ -72,20 +77,21 @@ public:
     int length = 1;
     int pitchPeriod = 0;
     int playhead = 0;
-    int activeCounter = 0;
+    bool isPlaying = false;
+    // int samplesSinceStarted = 0;
+    // bool isStarted = false;
+    // int activeCounter = 0;
     float playheadNormalized = 0.0f;
     float currentAmplitude = 0.0f;
-  } grains[3];
-
-  // grain *activeGrain = &grains[0];
+    float currentSample = 0.0f;
+  } grains[nrOfGrains];
 
   grain *newestGrain = &grains[0];
+  grain *latestStartedGrain = &grains[0];
 
-  grain *fadeInGrain = &grains[0];
-  grain *fadeOutGrain = &grains[1];
-  grain *freeGrain = &grains[2];
-  // TODO: Use a null pointer to safeguard a bit.
-  // grain *freeGrain2 = 0;
+  // grain *fadeInGrain = &grains[0];
+  // grain *fadeOutGrain = &grains[1];
+  // grain *freeGrain = &grains[2];
 
   float fadeInAmplitude = 0.0f;
   float fadeOutAmplitude = 0.0f;

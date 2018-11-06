@@ -1,4 +1,5 @@
 #include "pitch_shifter.h"
+#include <Bela.h>
 
 float PitchShifter::process(float inSample)
 {
@@ -30,10 +31,12 @@ float PitchShifter::process(float inSample)
   // float combinedSample = fadingOutSample;
 
   //jump if needed and save jumpLength
+
+  // TODO: Verify that this distance check is correct!
   int distanceBetweenInOut = wrapBufferSample(inputPointer - (int)outputPointer, inputRingBufferSize);
   if (distanceBetweenInOut > maxSampleDelay)
   {
-    // jumpLength = distanceBetweenInOut; Only do this if we don't set jumpLength from outside (i.e. the amdf/pitchtracker)!
+    // jumpLength = distanceBetweenInOut; //Only do this if we don't set jumpLength from outside (i.e. the amdf/pitchtracker)!
     fadingPointerOffset = jumpLength;
     outputPointer = wrapBufferSample(outputPointer + jumpLength, inputRingBufferSize);
     hasJumped = true;
@@ -58,158 +61,169 @@ float PitchShifter::process(float inSample)
   return combinedSample;
 }
 
-int periodMarkers[6] = {0, 0, 0, 0, 0, 0};
-
-int samplesUntilNewGrain = 0;
+bool noGrainIsPlaying = true;
+int samplesSinceLastGrainStarted = 0;
+int pitchPeriodOfLatestGrain = 0;
 float PitchShifter::PSOLA(float inSample)
 {
-  hasJumped = false;
   inputRingBuffer[inputPointer] = inSample;
 
   // Should we jump to a new grain?
-  // TODO: When should we actuuually jump?? Should we use the pitchperiod from when the grain was created or the latest pitchperiod?
-  if (fadeInGrain->activeCounter >= fadeInGrain->pitchPeriod)
+  // TODO: When should we aaaactually jump?? Should we use the pitchperiod from when the grain was created or the latest pitchperiod?
+  if (samplesSinceLastGrainStarted >= pitchPeriodOfLatestGrain)
   {
-
+    rt_printf(".");
     // Time to start playback of a new grain
-    if (newestGrain == freeGrain)
+    if (newestGrain)
     {
-      freeGrain = fadeOutGrain;
-      fadeOutGrain = fadeInGrain;
-      fadeInGrain = newestGrain;
-      fadeInGrain->playhead = 0;
-      fadeInGrain->activeCounter = 0;
-
-      // crossfadeValue = 0.0f;
-      // crossfadeIncrement = 1.0f / (fadeInGrain->length);
+      // freeGrain = fadeOutGrain;
+      // fadeOutGrain = fadeInGrain;
+      // fadeInGrain = newestGrain;
+      // fadeInGrain->playhead = 0;
+      assert(newestGrain->playhead == 0);
+      assert(!newestGrain->isPlaying);
+      latestStartedGrain = newestGrain;
+      newestGrain->isPlaying = true;
+      // newestGrain->isStarted = true;
+      pitchPeriodOfLatestGrain = newestGrain->pitchPeriod;
+      newestGrain = nullptr;
+      // rt_printf("starting a new grain\n");
     }
+    // No new grain available to start. Need to repeat the most recent one
     else
     {
-      // fadeOutGrain is finished and hence now free
-      // freeGrain2 = fadeOutGrain;
-      // There is no newer than fadeInGrain, so set as both fade in and fade out
-      // fadeOutGrain = fadeInGrain;
+      grain *pickedGrain = nullptr; 
+      // Find a free grain
+      for(int i = 0; i < this->nrOfGrains; i++)
+      {
+        if(!grains[i].isPlaying){
+          pickedGrain = &grains[i];
+          // rt_printf("picked grain %i for playback\n", i);
+          break;
+        }
+      }
+      if(pickedGrain){
+        // copy all the properties of the latest started grain
+        *pickedGrain = *latestStartedGrain;
+        pickedGrain->playhead = 0;
+        pickedGrain->playheadNormalized = 0.0f;
+        pickedGrain->isPlaying = true; //start it in case it isn't already playing
+        latestStartedGrain = pickedGrain;
+        pitchPeriodOfLatestGrain = latestStartedGrain->pitchPeriod;
+      }else{
+        // rt_printf("couldn't find an available grain to use as copy destination!");
+      }
+      
 
-      grain *tmpGrain = fadeInGrain;
-      fadeInGrain = fadeOutGrain;
-      fadeOutGrain = tmpGrain;
-
-      *fadeInGrain = *fadeOutGrain;
-      fadeInGrain->playhead = 0;
-      fadeInGrain->activeCounter = 0;
-
-      // crossfadeValue = 0.0f;
-      // crossfadeIncrement = 1.0f / (fadeInGrain->length);
     }
 
-    // crossfadeValue = -1.0f;
-    // int grainLength = wrapBufferSample(activeGrain->endIndex - activeGrain->startIndex, inputRingBufferSize);
-    // crossfadeIncrement = 2.0f / activeGrain->length;
-
-    crossfadeTime = -1.0f;
-
-    // samplesUntilNewGrain = activeGrain->length;
-
-    // Let's jump to the grains start position
-    // outputPointer = activeGrain->startIndex;
-    hasJumped = true;
+    samplesSinceLastGrainStarted = 0;
   }
 
   //TODO: Actually allow creation of a new grain as soon as we can be certain it's playback will not overtake inputPointer.
   // will be related to formant (playbackspeed of grains) and grainsize.
-  
-  // TODO: constant power (or constant voltage) hann crossfade instead of windowing for each grain.
-
-  // create new grain
-  // int possibleGrainSize = wrapBufferSample(inputPointer - newestGrain->endIndex, inputRingBufferSize);
-  // int grainSize = pitchEstimatePeriod * 4;
 
   // Let's actually create grains that have their center pitchperiod samples apart from each other (will mean overlap).
-  // So if their length 2 x pitchperiod, there would be two grains always overlapping.
-  int distanceFromLastGrain = wrapBufferSample(inputPointer - newestGrain->startIndex, inputRingBufferSize);
-  int grainSize = pitchEstimatePeriod*2.0f;
-  if (distanceFromLastGrain >= grainSize)
-  {
-    // int startIndex = newestGrain->endIndex;
-    // int length = actualGrainSize;
-    // int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
+  // So if their length is 2 x pitchperiod, there would be two grains always overlapping.
 
-    int startIndex = wrapBufferSample(newestGrain->startIndex + grainSize, inputRingBufferSize);
+  grain *compareGrain = nullptr;
+  if(newestGrain){
+    compareGrain = newestGrain;
+  }else{
+    compareGrain = latestStartedGrain;
+  }
+
+
+  int distanceFromLastGrain = wrapBufferSample(inputPointer - compareGrain->startIndex, inputRingBufferSize);
+
+  int grainSize = pitchEstimatePeriod*2.0f;
+  if (distanceFromLastGrain >= pitchEstimatePeriod)
+  {
+    rt_printf("-");
+
+    int startIndex = wrapBufferSample(compareGrain->startIndex + pitchEstimatePeriod, inputRingBufferSize);
     int length = grainSize;
     int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
-
-    newestGrain = freeGrain;
+    
+    for(int i = 0; i < this->nrOfGrains; i++)
+    {
+      if(!grains[i].isPlaying){
+        newestGrain = &grains[i];
+        break;
+      }
+    }
+    if(!newestGrain){
+      // rt_printf("Couldn't find an available grain to use as newestGrain. Using compareGrain instead.");
+      newestGrain = compareGrain;
+      newestGrain->isPlaying = false;
+    }
+    
+    // newestGrain = freeGrain;
     newestGrain->startIndex = startIndex;
     newestGrain->endIndex = endIndex;
     newestGrain->length = length;
     newestGrain->pitchPeriod = pitchEstimatePeriod / pitchRatio;
-    // newestGrain->playhead = 0;
-    newestGrain->activeCounter = 0;
+    newestGrain->playhead = 0;
+
+    // rt_printf("Creating new grain. startIndex: %i, length: %i, pitchPeriod: %i \n", startIndex, length, newestGrain->pitchPeriod);
+
+    // if(noGrainIsPlaying && this->pitchEstimatePeriod != 0){
+    //   newestGrain->isPlaying = true;
+    //   rt_printf("starting the first grain!\n");
+    //   noGrainIsPlaying = false;
+    // }
 
   };
 
-  // activeIsFree = activeGrain == freeGrain;
-  // newestIsFree = newestGrain == freeGrain;
-  // newestIsActive = newestGrain == activeGrain;
+  // assert(fadeInGrain != fadeOutGrain);
+  // assert(fadeOutGrain != freeGrain);
+  // assert(freeGrain != fadeInGrain);
 
-  assert(fadeInGrain != fadeOutGrain);
-  assert(fadeOutGrain != freeGrain);
-  assert(freeGrain != fadeInGrain);
+  // float fadeOutSample = inputRingBuffer[wrapBufferSample(fadeOutGrain->startIndex + fadeOutGrain->playhead, inputRingBufferSize)];
 
+  // float fadeInSample = inputRingBuffer[wrapBufferSample(fadeInGrain->startIndex + fadeInGrain->playhead, inputRingBufferSize)];
 
-  // crossfadeValue += crossfadeIncrement;
-  // crossfadeValue = fmin(1.0f, crossfadeValue);
-  // tempCrossfade = fmax(0.0f, (1.0 - fabsf_neon(crossfadeValue)));
-
-  // tempCrossfade = getBlackmanFast(activeGrain->playhead, activeGrain->length);
-
-  // TODO: avoid this weird check if possible
-  // if (activeGrain->playhead > activeGrain->length)
-  // {
-  //   tempCrossfade = 0.0f;
-  // }
-
-  // outputPointer = wrapBufferSample(activeGrain->startIndex + activeGrain->playhead, inputRingBufferSize);
-  float fadeOutSample = inputRingBuffer[wrapBufferSample(fadeOutGrain->startIndex + fadeOutGrain->playhead, inputRingBufferSize)];
-  // fadeOutAmplitude = 
-  float fadeInSample = inputRingBuffer[wrapBufferSample(fadeInGrain->startIndex + fadeInGrain->playhead, inputRingBufferSize)];
-  // 
-
-  // float combinedSample = tempCrossfade * inputRingBuffer[(int)outputPointer];
-  
-  // outputPointer++;
-  // outputPointer = wrapBufferSample(outputPointer, inputRingBufferSize);
-  // samplesUntilNewGrain--;
-  // activeGrain->playhead++;
-
-  // fadeInGrain->playheadNormalized = (float)fadeInGrain->playhead / ((float)fadeInGrain->length * 2);
-  fadeInGrain->playhead++;
-  fadeInGrain->activeCounter++;
   // fadeInGrain->currentAmplitude = hannCrossFade(crossfadeTime);
-  fadeInGrain->currentAmplitude = getBlackmanFast(fadeInGrain->playhead, fadeInGrain->length);
-  // fadeInGrain->playhead =(int) fmin((float)fadeInGrain->playhead, (float)fadeInGrain->length);
+  // fadeInGrain->currentAmplitude = getBlackmanFast(fadeInGrain->playhead, fadeInGrain->length);
   
-  // fadeOutGrain->playheadNormalized = (float)fadeOutGrain->playhead / ((float)fadeOutGrain->length * 2);
-  fadeOutGrain->playhead++;
-  fadeOutGrain->activeCounter++;
   // fadeOutGrain->currentAmplitude = hannCrossFade(-crossfadeTime);
-  fadeOutGrain->currentAmplitude = getBlackmanFast(fadeOutGrain->playhead, fadeOutGrain->length);
-  // fadeOutGrain->playhead =(int) fmin((float) fadeOutGrain->playhead, (float)fadeOutGrain->length);
+  // fadeOutGrain->currentAmplitude = getBlackmanFast(fadeOutGrain->playhead, fadeOutGrain->length);
 
-  float combinedSample = fadeInGrain->currentAmplitude * fadeInSample + fadeOutGrain->currentAmplitude * fadeOutSample;
+  // float combinedSample = fadeInGrain->currentAmplitude * fadeInSample + fadeOutGrain->currentAmplitude * fadeOutSample;
 
-  crossfadeTime += 1.0f / 10;
+  // crossfadeTime += 1.0f / 10;
   ++inputPointer %= inputRingBufferSize;
 
-  //update the grains
-  for(int i = 0; i < 3; i++)
+  float combinedSample = 0.0f;
+  //update all grains
+  for(int i = 0; i < this->nrOfGrains; i++)
   {
-    // grains[i].playhead++;
+    if(grains[i].isPlaying){
+      // TODO: Use hann window.
+      // TODO: Implement pitchmarks so we get most energy from source material!
+      // TODO: Variable playback speed of grains (formants).
+      grains[i].currentAmplitude = getBlackmanFast(grains[i].playhead, grains[i].length);
+      float sample = inputRingBuffer[wrapBufferSample(grains[i].startIndex + grains[i].playhead, inputRingBufferSize)];
+      grains[i].currentSample = grains[i].currentAmplitude * sample;
+      combinedSample += grains[i].currentSample;
+
+      grains[i].playhead++;
+      grains[i].playheadNormalized = (float) grains[i].playhead / (grains[i].length);
+    }
+
+    // if(grains[i].isStarted){
+    //   grains[i].samplesSinceStarted++;
+    // }
+    
+    if(grains[i].isPlaying && grains[i].playhead >= grains[i].length){
+      grains[i].isPlaying = false;
+    }
     // grains[i].activeCounter++;
-    grains[i].playhead = std::min(grains[i].playhead, grains[i].length);
+    // grains[i].playhead = std::min(grains[i].playhead, grains[i].length);
     // grains[i].currentAmplitude = getBlackmanFast(grains[i].playhead, grains[i].length);
-    grains[i].playheadNormalized = (float) grains[i].playhead / (grains[i].length * 2);
   }
+
+  samplesSinceLastGrainStarted++;
 
   return combinedSample;
 }

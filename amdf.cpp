@@ -29,6 +29,7 @@ void Amdf::initiateAMDF()
   this->compareIndexStart = searchIndexStart - this->highestTrackableNotePeriod;
   this->compareIndexStop = compareIndexStart + correlationWindowSize;
   amdfIsDone = false;
+  pitchEstimateReady = false;
 
   this->requiredCyclesToComplete =  searchWindowSize;
   this->progress = 0.0f;
@@ -65,7 +66,7 @@ void Amdf::process(float inSample)
   }
 
   this->amdfScore = pitchtrackingAmdfScore = 0.0f; // initialize before running the summation
-  nrOfTestedSamplesInCorrelationWindow = 0;
+  int nrOfTestedSamplesInCorrelationWindow = 0;
   for (int currentCompareIndex = compareIndexStart, i = 0; currentCompareIndex < compareIndexStop; currentCompareIndex += jumpLengthBetweenTestedSamples, i += jumpLengthBetweenTestedSamples)
   {
     int k = wrapBufferSample(currentCompareIndex, bufferLength);
@@ -77,7 +78,7 @@ void Amdf::process(float inSample)
   if (amdfScore <= bestSoFar)
   {
     bestSoFar = amdfScore;
-    bestSoFarIndexJump = compareIndexStart - currentSearchIndex;
+    bestSoFarIndexJump = currentSearchIndex - compareIndexStart;
   }
 
   // weight starts small and becomes higher with growing jumpdistance.
@@ -100,15 +101,15 @@ void Amdf::process(float inSample)
     previousPitchTrackingAmdfScores[0] = pitchtrackingAmdfScore;
   }
 
-  if(pitchtrackingAmdfScore < 0.25 && atLocalMinimi){
-      pitchEstimateReady = 1.0;
-    }
+  if(pitchEstimateReady || pitchtrackingAmdfScore < 0.25 && atLocalMinimi){
+    pitchEstimateReady = true;
+    this->pitchEstimate = pitchtrackingBestIndexJump;
+  }
 
   if (pitchtrackingAmdfScore < pitchtrackingBestSoFar)
   {
     pitchtrackingBestSoFar = pitchtrackingAmdfScore;
-    // pitchtrackingBestIndexJump = wrapBufferSample(compareIndexStart - currentSearchIndex, bufferLength);
-    pitchtrackingBestIndexJump = compareIndexStart - currentSearchIndex;
+    pitchtrackingBestIndexJump = currentSearchIndex - compareIndexStart;
   }
   else
   {
@@ -123,7 +124,6 @@ void Amdf::process(float inSample)
     amdfIsDone = true;
 
     this->amdfValue = bestSoFar;
-    this->previousJumpValue = this->jumpValue;
     this->jumpValue = bestSoFarIndexJump;
 
     //this->jumpDifference = filter_C * std::abs(this->jumpValue - bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
@@ -132,9 +132,10 @@ void Amdf::process(float inSample)
     frequencyEstimateAveraged = average_C * newFreqEstimate + (1.0f - average_C) * frequencyEstimateAveraged;
 
     // float newPitchEstimate = 69 + 12 * logf_neon(newFreqEstimate/440.0f) * this->inverseLog_2;
-    float newPitchEstimate = 0.5 * logf_neon(newFreqEstimate / 440.0f) * this->inverseLog_2;
+    // float newPitchEstimate = 0.5 * logf_neon(newFreqEstimate / 440.0f) * this->inverseLog_2;
     // pitchEstimateAveraged = average_C * newPitchEstimate + (1.0f - average_C) * pitchEstimateAveraged;
 
+    //Calculate the change in semitones from the previous pitchestimate
     float ratio = newFreqEstimate / this->previousFrequencyEstimate;
     float semiTones = logf_neon(ratio) * this->inverseLog_2;
     // float score = std::fmax(0.0f, 1.0f - (ratio - 1.0f) * 10);
@@ -159,16 +160,9 @@ void Amdf::process(float inSample)
     float estimate_C = 0.3f;
     // this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 - estimate_C) * this->frequencyEstimate;
     this->frequencyEstimate = newFreqEstimate;
-    this->pitchEstimate = estimate_C * newPitchEstimate + (1.0 - estimate_C) * this->pitchEstimate;
+    // this->pitchEstimate = estimate_C * newPitchEstimate + (1.0 - estimate_C) * this->pitchEstimate;
   }
 
   currentSearchIndex++;
-
-  this->pitchEstimateReady-=0.03;
-
   this->progress = (float)(currentSearchIndex - searchIndexStart) / (float) this->requiredCyclesToComplete;
-  // weight -= weightIncrement;
-
-  // return amdfIsDone;
-  // return bestSoFarIndex;
 }

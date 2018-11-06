@@ -206,7 +206,7 @@ bool setup(BelaContext *context, void *userData)
   // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
   scope.setSlider(0, 0.0, 1.0, 0.00001, 0.5f, "dry mix");
   scope.setSlider(1, 0.0, 1.0, 0.00001, 0.0f, "pitch mix");
-  scope.setSlider(2, 0.25, 1.0, 0.00001, .25f, "pitch interval");
+  scope.setSlider(2, 0.25, 1.0, 0.00001, 1.0f, "pitch interval");
   scope.setSlider(3, 0.0, 1.0, 0.00001, 0.5f, "synth mix");
   scope.setSlider(4, 0.25, 2.0, 0.00001, 0.5f, "synth pitch");
   scope.setSlider(5, 0.0, 4.0, 1.0, 0.0f, "synth waveform");
@@ -239,13 +239,16 @@ float oscAmplitudeIncrement = .00001f;
 float filteredAmplitudeC = 0.002;
 float filteredAmplitude = 0.0f;
 
+// int testCounter = 0;
+
 void render(BelaContext *context, void *userData)
 {
   for (unsigned int n = 0; n < context->audioFrames; n++)
   {
     //read input, with dc blocking
     in_l = dcBlocker.filter(audioRead(context, n, 0));
-    // in_r = dcBlocker.filter(audioRead(context, n, 1));
+    in_r = dcBlocker.filter(audioRead(context, n, 1));
+    in_l += in_r;
 
     // //bypass
     // audioWrite(context, n, 0, audioRead(context, n, 0));
@@ -341,16 +344,16 @@ void render(BelaContext *context, void *userData)
     
     /// TESTING THE NEW PITCHSHIFTER
     pitchShifter.setPitchRatio(scope.getSliderValue(2));
-    // pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
+    pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
     float pitchedSample;
-    if ((int)scope.getSliderValue(6) == 1)
-    {
-      pitchedSample = pitchShifter.process(in_l);
-    }
-    else
-    {
+    // if ((int)scope.getSliderValue(6) == 1)
+    // {
+      // pitchedSample = pitchShifter.process(in_l);
+    // }
+    // else
+    // {
       pitchedSample = pitchShifter.PSOLA(in_l);
-    }
+    // }
 
     float waveThreshold = 0.016;
     out_l = dryMix * in_l
@@ -367,9 +370,9 @@ void render(BelaContext *context, void *userData)
         // + 0.2f * audioDelay.getSample()
         ;
 
-    out_l = combFilter.process(out_l);
+    // out_l = combFilter.process(out_l);
 
-    out_l = waveshaper.process(out_l);
+    // out_l = waveshaper.process(out_l);
 
     //Apply tremolo/AM
     // out_l = out_l * (1.0 - tremoloSample);
@@ -378,7 +381,7 @@ void render(BelaContext *context, void *userData)
     audioWrite(context, n, 1, out_l);
 
     //Increment all da pointers!!!!
-    ++inputPointer %= ringBufferSize;
+    // ++inputPointer %= ringBufferSize;
 
     // outputPointer += outputPointerSpeed;
     // outputPointer = wrapBufferSample(outputPointer, ringBufferSize);
@@ -390,17 +393,37 @@ void render(BelaContext *context, void *userData)
     // crossfadeValue = max(crossfadeValue, 0.0f);
     amdf.process(in_l);
     scope.log(
-      // amdf.normalizedInSample,
       in_l,
+      out_l,
+      pitchShifter.grains[0].playheadNormalized,
+      // pitchShifter.grains[0].currentSample;
+      pitchShifter.grains[1].playheadNormalized,
+      // pitchShifter.grains[1].currentSample;
+      pitchShifter.grains[2].playheadNormalized,
+      // pitchShifter.grains[2].currentSample;
+      pitchShifter.grains[3].playheadNormalized,
+      // pitchShifter.grains[3].currentSample;
+      pitchShifter.grains[4].playheadNormalized,
+      // pitchShifter.grains[4].currentSample;
+      pitchShifter.grains[5].playheadNormalized
+      // pitchShifter.grains[5].currentSample;
       // amdf.rmsValue,
       // rmsValue
-      amdf.amdfScore,
-      amdf.progress,
-      amdf.inputPointerProgress,
-      amdf.pitchtrackingAmdfScore,
-      amdf.pitchEstimateReady,
-      amdf.weight
+      // amdf.amdfScore,
+      // amdf.progress,
+      // pitchedSample
+      // amdf.inputPointerProgress,
+      // amdf.pitchtrackingAmdfScore,
+      // pitchShifter.crossfadeValue
+      // float(testCounter)/500.0f,
+      // getBlackmanFast((testCounter++)-100, 200)
+      // amdf.weight
     );
+
+    // testCounter %= 500;
+    
+    // rt_printf("jumpLength: %i \n", pitchShifter.jumpLength);
+
     if (amdf.amdfIsDone)
     {
       if (amdf.frequencyEstimate < highestTrackableFrequency)
@@ -421,7 +444,7 @@ void render(BelaContext *context, void *userData)
       scope.trigger();
 
       pitchShifter.setJumpLength(amdf.jumpValue);
-      pitchShifter.setPitchEstimatePeriod(context->audioSampleRate / amdf.frequencyEstimate);
+      pitchShifter.setPitchEstimatePeriod(amdf.pitchEstimate);
     }
 
     if (pitchShifter.hasJumped)

@@ -1,3 +1,7 @@
+### Bug fixing
+- [ ] Determine if it's worth to do sinc interpolation in regards to quality.
+- [ ] Make PSOLA work!!!
+
 ### Bela code
 
 - [ ] Move the interpolation code to separate file
