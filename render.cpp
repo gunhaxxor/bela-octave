@@ -63,7 +63,7 @@ DcBlocker dcBlocker;
 // 4
 
 const int lowestTrackableFrequency = 95;
-const int highestTrackableFrequency = 800;
+const int highestTrackableFrequency = 1000;
 const int lowestTrackableNotePeriod = SAMPLERATE / lowestTrackableFrequency;
 const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
 // const int ringBufferSize = lowestTrackableNotePeriod * 8;
@@ -210,13 +210,13 @@ bool setup(BelaContext *context, void *userData) {
 
   scope.setup(10, context->audioSampleRate, 7);
   // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
-  scope.setSlider(0, 0.0, 1.0, 0.00001, 1.0f, "dry mix");
-  scope.setSlider(1, 0.0, 1.0, 0.00001, 0.0f, "pitch mix");
-  scope.setSlider(2, 0.25, 1.0, 0.00001, 1.0f, "pitch interval");
+  scope.setSlider(0, 0.0, 1.0, 0.00001, 0.0f, "dry mix");
+  scope.setSlider(1, 0.0, 1.0, 0.00001, 1.0f, "pitch mix");
+  scope.setSlider(2, 0.25, 1.0, 0.00001, 0.5f, "pitch interval");
   scope.setSlider(3, 0.0, 1.0, 0.00001, 0.5f, "synth mix");
   scope.setSlider(4, 0.25, 2.0, 0.00001, 0.5f, "synth pitch");
   scope.setSlider(5, 0.0, 4.0, 1.0, 0.0f, "synth waveform");
-  scope.setSlider(6, 0.0, 1.0, 1.0, 0.0f, "filter type");
+  scope.setSlider(6, 0.0, 1.0, 1.0, 0.0f, "pitch shift type");
   // scope.setSlider(7, 20.0, 10000.0, 0.1, 500.0, "filter cutoff");
   // scope.setSlider(8, 0.0f, 1.0f, 0.00001, 0.0f, "filter resonance");
   // scope.setSlider(9, 0.0f, 1.0f, 0.00001, 0.0f, "env to cutoff");

@@ -195,10 +195,12 @@ float PitchShifter::PSOLA(float inSample) {
     // latestPitchMarkUsed = true;
     // rt_printf("-");
 
-    int startIndex = wrapBufferSample(
-        compareGrain->startIndex + pitchEstimatePeriod, inputRingBufferSize);
-    // int startIndex = inputPointer + pitchMarkIndexOffset; // Be aware that
-    // pitchMarkIndexOffset will hold a negative value
+    // int startIndex = wrapBufferSample(
+    //     compareGrain->startIndex + pitchEstimatePeriod, inputRingBufferSize);
+    int startIndex =
+        inputPointer + pitchMarkIndexOffset +
+        pitchEstimatePeriod / 4; // Be aware that pitchMarkIndexOffset
+                                 // will hold a negative value
     int length = grainSize;
     int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
 

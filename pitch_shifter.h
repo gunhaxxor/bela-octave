@@ -52,7 +52,7 @@ public:
   // parameters
   float pitchRatio;
   int jumpLength = 1;
-  int pitchEstimatePeriod = 0;
+  int pitchEstimatePeriod = 1;
   int interpolationMode = 1;
 
   // constructor-initialized variables
