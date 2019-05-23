@@ -2,19 +2,21 @@
 #define PITCHSHIFTER_H
 
 #include "math_neon.h"
-#include <cmath>
-#include "utility.h"
 #include "sinc_interpolation.h"
-#undef NDEBUG
-#include <assert.h>
-#include <algorithm>
-#include "filter.h"
+#include "utility.h"
+#include <cmath>
 
-class PitchShifter
-{
+#undef NDEBUG
+#include "filter.h"
+#include <Scope.h>
+#include <algorithm>
+#include <assert.h>
+
+class PitchShifter {
 public:
-  PitchShifter(int sampleRate, float lowestTrackableFrequency, float highestTrackableFrequency, float pitchRatio)
-  {
+  PitchShifter(int sampleRate, float lowestTrackableFrequency,
+               float highestTrackableFrequency, float pitchRatio) {
+    // this->scope = scope;
     this->sampleRate = sampleRate;
     this->lowestTrackableFrequency = lowestTrackableFrequency;
     this->highestTrackableFrequency = highestTrackableFrequency;
@@ -25,18 +27,23 @@ public:
     // this->lowPassedRingBuffer = new float[inputRingBufferSize];
 
     this->maxSampleDelay = lowestTrackableNotePeriod * 2;
-    this->jumpLength = maxSampleDelay; // just a default value if we don't provide continuous period length tracking
+    this->jumpLength =
+        maxSampleDelay; // just a default value if we don't provide continuous
+                        // period length tracking
 
     this->pitchRatio = pitchRatio;
 
-
-    //PSOLA stuff
+    // PSOLA stuff
     // latestStartedGrain->isPlaying = true;
   };
 
-  void setPitchRatio(float pitchRatio) { this->pitchRatio = fmin(1.0f, fmax(pitchRatio, 0.001f)); };
+  void setPitchRatio(float pitchRatio) {
+    this->pitchRatio = fmin(1.0f, fmax(pitchRatio, 0.001f));
+  };
   void setJumpLength(int jumpLength) { this->jumpLength = jumpLength; };
-  void setPitchEstimatePeriod(float period){ this->pitchEstimatePeriod = (float) period;};
+  void setPitchEstimatePeriod(float period) {
+    this->pitchEstimatePeriod = (float)period;
+  };
   void setInterpolationsMode(int mode) { this->interpolationMode = mode; };
   float process(float inSample);
   float PSOLA(float inSample);
@@ -59,7 +66,7 @@ public:
   // float *lowPassedRingBuffer;
   int maxSampleDelay;
 
-  //completely internal variables
+  // completely internal variables
   int inputPointer = 0;
   float outputPointer = 0.0f;
   int fadingPointerOffset = 0;
@@ -67,10 +74,9 @@ public:
   float crossfadeIncrement = 0;
   float crossfadeTime = 0.0f;
 
-  //PSOLA
+  // PSOLA
   static const int nrOfGrains = 8;
-  struct grain
-  {
+  struct grain {
     // bool active;
     int startIndex = 0;
     int endIndex = 0;
@@ -96,7 +102,19 @@ public:
   float fadeInAmplitude = 0.0f;
   float fadeOutAmplitude = 0.0f;
 
-  //debug variables
+  float pitchMarkCandidateValue = 0.f;
+  int pitchMarkCandidateIndexOffset = 0;
+
+  bool latestPitchMarkUsed = false;
+  float pitchMarkValue = 0.0f;
+  int pitchMarkIndexOffset = 0;
+
+  // debug variables
+  // Scope* scope;
+
+  float pitchMarkScopeDebug = 0;
+  float pitchMarkCandidateScopeDebug = 0;
+
   bool hasJumped = false;
   float tempCrossfade;
   bool activeIsFree = false;
@@ -106,8 +124,11 @@ public:
 
 #endif
 
-////////////TODO: Fix fade with amdfjump. I took it away from the sinc interpolation now since I want less spaghetticode
+////////////TODO: Fix fade with amdfjump. I took it away from the sinc
+/// interpolation now since I want less spaghetticode
 // with unexpected dependencies. A clean interpolation :-)
-// Maybe create a special (overloaded?) version of the interpolation that take two indices and a fadevalue?
-// The alternative is to run the interpolation twice for each pitcher (would rather avoid that!)
-// Ooor. Can we mix all the fade samples together before interpolation? Into a new small array that spans the windowed sinc length.
+// Maybe create a special (overloaded?) version of the interpolation that take
+// two indices and a fadevalue? The alternative is to run the interpolation
+// twice for each pitcher (would rather avoid that!) Ooor. Can we mix all the
+// fade samples together before interpolation? Into a new small array that spans
+// the windowed sinc length.

@@ -1,13 +1,12 @@
 #ifndef AMDF_H
 #define AMDF_H
 
-#include <math_neon.h>
-#include <cmath>
-#include "utility.h"
 #include "filter.h"
+#include "utility.h"
+#include <cmath>
+#include <math_neon.h>
 
-class Amdf
-{
+class Amdf {
 public:
   int jumpValue;
 
@@ -22,24 +21,27 @@ public:
   float previousPitchTrackingAmdfScores[2] = {5.0, 5.0};
   bool atLocalMinimi = false;
 
-  //debug
+  // debug
   bool minimiPoint = false;
   int requiredCyclesToComplete = 0;
   float progress = 0.0f;
   float inputPointerProgress = 0.0f;
   bool pitchEstimateReady = false;
 
-  Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal)
-  {
+  Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal) {
     correlationWindowSize = longestExpectedPeriodOfSignal * amdf_C;
-    
-    //The paper states this is the proper searchWindowSize:
+
+    // The paper states this is the proper searchWindowSize:
     // searchWindowSize = longestExpectedPeriodOfSignal - correlationWindowSize;
 
-    //But me intuition tells me we want to test jumplengths from shortestExpectedPeriodOfSignal to longestExpectedPeriodOfSignal
-    this->searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal;
-    // searchWindowSize = longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal; // - correlationWindowSize;
-    // nrOfTestedSamplesInCorrelationWindow = (float) correlationWindowSize / jumpLengthBetweenTestedSamples;
+    // But me intuition tells me we want to test jumplengths from
+    // shortestExpectedPeriodOfSignal to longestExpectedPeriodOfSignal
+    this->searchWindowSize =
+        longestExpectedPeriodOfSignal - shortestExpectedPeriodOfSignal;
+    // searchWindowSize = longestExpectedPeriodOfSignal -
+    // shortestExpectedPeriodOfSignal; // - correlationWindowSize;
+    // nrOfTestedSamplesInCorrelationWindow = (float) correlationWindowSize /
+    // jumpLengthBetweenTestedSamples;
 
     weightIncrement = maxWeight / searchWindowSize;
 
@@ -50,29 +52,27 @@ public:
     this->lowPassedRingBuffer = new float[this->bufferLength];
     this->lowestTrackableNotePeriod = longestExpectedPeriodOfSignal;
     this->highestTrackableNotePeriod = shortestExpectedPeriodOfSignal;
-    
-    for(int i = 0; i < bufferLength; i++)
-    {
-      this->inputRingBuffer[i] = 0.0f; 
+
+    for (int i = 0; i < bufferLength; i++) {
+      this->inputRingBuffer[i] = 0.0f;
       this->normalizedRingBuffer[i] = 0.0f;
-      this->lowPassedRingBuffer[i] = 0.0f; 
+      this->lowPassedRingBuffer[i] = 0.0f;
     }
 
     this->squareSumSamplesSize = lowestTrackableNotePeriod * 2;
     this->squareSumSamples = new float[squareSumSamplesSize];
-    for(int i = 0; i < squareSumSamplesSize; i++)
-    {
+    for (int i = 0; i < squareSumSamplesSize; i++) {
       this->squareSumSamples[i] = 0.0f;
     }
   }
 
-  void setup(int sampleRate)
-  {
+  void setup(int sampleRate) {
     this->sampleRate = sampleRate;
     lopass.setCutoff(this->sampleRate / highestTrackableNotePeriod);
     lopass.setResonance(3.0);
   }
-  // void initiateAMDF(int searchIndexStart, int compareIndexStart);//, float *sampleBuffer, int bufferLength);
+  // void initiateAMDF(int searchIndexStart, int compareIndexStart);//, float
+  // *sampleBuffer, int bufferLength);
   void initiateAMDF();
   void process(float inSample);
 
@@ -101,7 +101,8 @@ public:
   float rmsValue = 0.0f;
   float normalizedInSample = 0;
 
-  float amdfScore; // low value means good correlation. high value means big difference between the compared windows
+  float amdfScore; // low value means good correlation. high value means big
+                   // difference between the compared windows
   float bestSoFar;
   int bestSoFarIndex;
   int bestSoFarIndexJump;

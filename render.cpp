@@ -14,37 +14,41 @@ Centre for Digital Music at Queen Mary University of London.
 http://www.eecs.qmul.ac.uk/~andrewm
 
 (c) 2016 Augmented Instruments Laboratory: Andrew McPherson,
-	Astrid Bin, Liam Donovan, Christian Heinrichs, Robert Jack,
-	Giulio Moro, Laurel Pardue, Victor Zappi. All rights reserved.
+        Astrid Bin, Liam Donovan, Christian Heinrichs, Robert Jack,
+        Giulio Moro, Laurel Pardue, Victor Zappi. All rights reserved.
 
 The Bela software is distributed under the GNU Lesser General Public License
 (LGPL 3.0), available    here: https://www.gnu.org/licenses/lgpl-3.0.txt
 */
+#include "utility.h"
 #include <Bela.h>
 #include <Scope.h>
 #include <cmath>
 #include <math_neon.h>
-#include "utility.h"
-//Let's undefine this so we can get debug output!
-#undef NDEBUG
-#include <assert.h>
 
-#include "oscillator.h"
+// Let's undefine this so we can get debug output!
+#undef NDEBUG
+#include <cassert>
+
 #include "delay.h"
 #include "filter.h"
-#include "waveshaper.h"
+#include "oscillator.h"
 #include "pitch_shifter.h"
+#include "waveshaper.h"
 
 #include "amdf.h"
-#include "sinc_interpolation.h"
 #include "dc_blocker.h"
+#include "sinc_interpolation.h"
 
 float inverseSampleRate;
-float phase = 0;
+
+float sinePhase = 0;
+float sineFrequency = 400;
 
 Scope scope;
 
 Oscillator osc;
+Oscillator osc2;
 
 DcBlocker dcBlocker;
 
@@ -53,42 +57,44 @@ DcBlocker dcBlocker;
 // #define LOWESTTRACKABLEFREQUENCY 103
 // #define HIGHESTTRACKABLEFREQUENCY 882
 
-// #define LOWESTNOTEPERIOD 424 //424 CORRESPONDS TO pitch of ~104 Hz if samplerate is 44.1 kHz
-// #define HIGHESTNOTEPERIOD 50 //50 CORRESPONDS TO pitch of 882 Hz if samplerate is 44.1 kHz
-// #define ringBufferSize LOWESTNOTEPERIOD * 4
+// #define LOWESTNOTEPERIOD 424 //424 CORRESPONDS TO pitch of ~104 Hz if
+// samplerate is 44.1 kHz #define HIGHESTNOTEPERIOD 50 //50 CORRESPONDS TO pitch
+// of 882 Hz if samplerate is 44.1 kHz #define ringBufferSize LOWESTNOTEPERIOD *
+// 4
 
 const int lowestTrackableFrequency = 95;
 const int highestTrackableFrequency = 800;
 const int lowestTrackableNotePeriod = SAMPLERATE / lowestTrackableFrequency;
 const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
-const int ringBufferSize = lowestTrackableNotePeriod * 8;
+// const int ringBufferSize = lowestTrackableNotePeriod * 8;
 
 int inputPointer = 0;
 // float outputPointer = 0;
 // float fadingOutputPointerOffset = 0;
 // float outputPointerSpeed = 0.75f;
-float ringBuffer[ringBufferSize];
+// float ringBuffer[ringBufferSize];
 
-float lowPassedRingBuffer[ringBufferSize];
-float lowPassedSample = 0;
+// float lowPassedRingBuffer[ringBufferSize];
+// float lowPassedSample = 0;
 
-//RMS stuff
+// RMS stuff
 const float rms_C = 0.0005;
 float squareSum = 0;
 float rmsValue = 0;
 
-//Interpolation stuff!
+// Interpolation stuff!
 // float crossFadeIncrement = 0.001f;
 // const int sincTableScaleFactor = 10000;
 // const int sincLength = 10;
-// const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use sincLength on both sides of the affected sample.
-// const int windowedSincTableSize = sincLengthBothSides * sincTableScaleFactor;
-// float blackmanWindow[sincLengthBothSides];
+// const int sincLengthBothSides = (sincLength * 2) + 1; //We want to use
+// sincLength on both sides of the affected sample. const int
+// windowedSincTableSize = sincLengthBothSides * sincTableScaleFactor; float
+// blackmanWindow[sincLengthBothSides];
 
 // float windowedSincTable[windowedSincTableSize];
 // float windowedSincTableDifferences[windowedSincTableSize];
 
-//Amdf stuff
+// Amdf stuff
 Amdf amdf = Amdf(lowestTrackableNotePeriod, highestTrackableNotePeriod);
 // float crossfadeValue = 0;
 
@@ -103,23 +109,13 @@ Waveshaper waveshaper = Waveshaper(Waveshaper::TANH);
 
 PitchShifter pitchShifter = PitchShifter(SAMPLERATE, 95.0f, 800.0f, 0.5f);
 
-float bypassProcess(float inSample)
-{
-  return inSample;
-}
+float bypassProcess(float inSample) { return inSample; }
 
-float (*effectSlots[])(float) = {
-    &bypassProcess,
-    &bypassProcess,
-    &bypassProcess,
-    &bypassProcess,
-    &bypassProcess,
-    &bypassProcess,
-    &bypassProcess,
-    &bypassProcess};
+float (*effectSlots[])(float) = {&bypassProcess, &bypassProcess, &bypassProcess,
+                                 &bypassProcess, &bypassProcess, &bypassProcess,
+                                 &bypassProcess, &bypassProcess};
 
-float in_l = 0,
-      in_r = 0, out_l = 0, out_r = 0;
+float in_l = 0, in_r = 0, out_l = 0, out_r = 0;
 
 // inline float normalizedSinc(float x)
 // {
@@ -128,7 +124,8 @@ float in_l = 0,
 //   {
 //     return 1.0;
 //   }
-//   return sin(x) / x; // will be used when building sinctable, so we want to use the best sin function.
+//   return sin(x) / x; // will be used when building sinctable, so we want to
+//   use the best sin function.
 // }
 
 // float getBlackman(float x, float M)
@@ -139,7 +136,8 @@ float in_l = 0,
 // void initializeWindowedSincTable()
 // {
 //   float previousY = 0;
-//   for (size_t i = 0; i < sizeof(windowedSincTable) / sizeof(windowedSincTable[0]); i++)
+//   for (size_t i = 0; i < sizeof(windowedSincTable) /
+//   sizeof(windowedSincTable[0]); i++)
 //   {
 //     float xSinc = ((float)i) / sincTableScaleFactor - sincLength;
 //     float xBlackman = ((float)i) / sincTableScaleFactor;
@@ -159,11 +157,10 @@ float in_l = 0,
 // //-6  -5  -4  -3  -2  -1   0   1   2   3   4   5   6
 // float interpolateFromTable(float index)
 // {
-//   // First calculate the fractional so we know where to shift the sinc function.
-//   int integral;
-//   float fractional = modf_neon(index, &integral);
-//   int scaledFractional;
-//   float indexRatio = modf_neon(fractional * sincTableScaleFactor, &scaledFractional);
+//   // First calculate the fractional so we know where to shift the sinc
+//   function. int integral; float fractional = modf_neon(index, &integral); int
+//   scaledFractional; float indexRatio = modf_neon(fractional *
+//   sincTableScaleFactor, &scaledFractional);
 
 //   int currentSampleIndex = (int)integral - sincLength;
 //   int fadingSampleIndex = currentSampleIndex - fadingOutputPointerOffset;
@@ -173,22 +170,31 @@ float in_l = 0,
 //   float sincValue;
 //   int x;
 //   assert(windowedSincTable[0] < 0.000001f);
-//   assert(windowedSincTable[(sincLengthBothSides - 1) * sincTableScaleFactor] < 0.000001f);
-//   assert(windowedSincTable[sincLength * sincTableScaleFactor] == 1.0f);
+//   assert(windowedSincTable[(sincLengthBothSides - 1) * sincTableScaleFactor]
+//   < 0.000001f); assert(windowedSincTable[sincLength * sincTableScaleFactor]
+//   == 1.0f);
 
 //   for (int i = 1; i < sincLengthBothSides; i++)
 //   {
-//     currentSampleIndex = wrapBufferSample(currentSampleIndex, ringBufferSize);
-//     fadingSampleIndex = wrapBufferSample(fadingSampleIndex, ringBufferSize);
+//     currentSampleIndex = wrapBufferSample(currentSampleIndex,
+//     ringBufferSize); fadingSampleIndex = wrapBufferSample(fadingSampleIndex,
+//     ringBufferSize);
 
 //     x = i * sincTableScaleFactor - (int)scaledFractional;
-//     sincValue = windowedSincTable[x] + windowedSincTableDifferences[x + 1] * indexRatio;
-//     // TODO: Make the crossfade correct! We are using same crossfadeValue for neighbouring samples in the sinc interpolation
-//     // Maybe use a table with fade values, we can then retrieve them in here by offsetting with i.
-//     // Or, perhaps, in some way calculate how much adjacent samples differ in fadevalue and do something like crossfadeValue + (fadedifferencebetweensamples * (i - sincLength)
+//     sincValue = windowedSincTable[x] + windowedSincTableDifferences[x + 1] *
+//     indexRatio;
+//     // TODO: Make the crossfade correct! We are using same crossfadeValue for
+//     neighbouring samples in the sinc interpolation
+//     // Maybe use a table with fade values, we can then retrieve them in here
+//     by offsetting with i.
+//     // Or, perhaps, in some way calculate how much adjacent samples differ in
+//     fadevalue and do something like crossfadeValue +
+//     (fadedifferencebetweensamples * (i - sincLength)
 //     // Oh, well. Let's fuck that for now and just listen to it :-D
-//     float tempCrossfade = crossfadeValue - ((i - sincLength) * crossFadeIncrement);
-//     combinedSamples += sincValue * ((tempCrossfade * ringBuffer[fadingSampleIndex]) + (1.0f - tempCrossfade) * ringBuffer[currentSampleIndex]);
+//     float tempCrossfade = crossfadeValue - ((i - sincLength) *
+//     crossFadeIncrement); combinedSamples += sincValue * ((tempCrossfade *
+//     ringBuffer[fadingSampleIndex]) + (1.0f - tempCrossfade) *
+//     ringBuffer[currentSampleIndex]);
 
 //     currentSampleIndex++;
 //     fadingSampleIndex++;
@@ -196,15 +202,15 @@ float in_l = 0,
 //   return combinedSamples;
 // }
 
-bool setup(BelaContext *context, void *userData)
-{
-  // lowestTrackableNotePeriod = context->audioSampleRate / LOWESTTRACKABLEFREQUENCY;
-  // highestTrackableNotePeriod = context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY;
-  // ringBufferSize = lowestTrackableNotePeriod * 4;
+bool setup(BelaContext *context, void *userData) {
+  // lowestTrackableNotePeriod = context->audioSampleRate /
+  // LOWESTTRACKABLEFREQUENCY; highestTrackableNotePeriod =
+  // context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY; ringBufferSize =
+  // lowestTrackableNotePeriod * 4;
 
-  scope.setup(8, context->audioSampleRate, 7);
+  scope.setup(10, context->audioSampleRate, 7);
   // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
-  scope.setSlider(0, 0.0, 1.0, 0.00001, 0.5f, "dry mix");
+  scope.setSlider(0, 0.0, 1.0, 0.00001, 1.0f, "dry mix");
   scope.setSlider(1, 0.0, 1.0, 0.00001, 0.0f, "pitch mix");
   scope.setSlider(2, 0.25, 1.0, 0.00001, 1.0f, "pitch interval");
   scope.setSlider(3, 0.0, 1.0, 0.00001, 0.5f, "synth mix");
@@ -222,7 +228,8 @@ bool setup(BelaContext *context, void *userData)
   initializeWindowedSincTable();
 
   amdf.setup(context->audioSampleRate);
-  // amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
+  // amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer);
+  // //, ringBuffer, ringBufferSize);
   amdf.initiateAMDF();
   return true;
 }
@@ -240,14 +247,13 @@ float filteredAmplitudeC = 0.002;
 float filteredAmplitude = 0.0f;
 
 // int testCounter = 0;
-
-void render(BelaContext *context, void *userData)
-{
-  for (unsigned int n = 0; n < context->audioFrames; n++)
-  {
-    //read input, with dc blocking
+void render(BelaContext *context, void *userData) {
+  for (unsigned int n = 0; n < context->audioFrames; n++) {
+    // read input, with dc blocking
     in_l = dcBlocker.filter(audioRead(context, n, 0));
     in_r = dcBlocker.filter(audioRead(context, n, 1));
+
+    // combine input channels
     in_l += in_r;
 
     // //bypass
@@ -256,36 +262,35 @@ void render(BelaContext *context, void *userData)
     // continue;
 
     // float factor = scope.getSliderValue(0);
-    // // Create sine wave
-    // phase += factor * 2.0 * M_PI * frequency * inverseSampleRate;
-    // // float sample = phase;
-    // float sample = sin(phase);
-    // in_l = 0.08f * sample;
-    //
-    // if(phase > M_PI){
-    // 	phase -= 2.0 * M_PI;
-    //   // scope.trigger();
-    // }
+    // Create sine wave
+    sinePhase += 2.0 * M_PI * sineFrequency * inverseSampleRate;
+    // float sample = sinePhase;
+    float sample = sin(sinePhase);
+    in_l = sample;
 
-    // frequency += 0.001;
-    // if(frequency > 881.0)
-    //   frequency=105.0;
-    // frequency = scope.getSliderValue(1);
-    // osc2.setFrequency(frequency);
-    // in_l = 0.3 * osc2.nextSample();
+    if (sinePhase > M_PI) {
+      sinePhase -= 2.0 * M_PI;
+      // scope.trigger();
+    }
 
-    ringBuffer[inputPointer] = in_l;
+    sineFrequency += 0.0001;
+    if (sineFrequency > 881.0)
+      sineFrequency = 105.0;
+
+    // ringBuffer[inputPointer] = in_l;
 
     audioDelay.insertSample(in_l);
 
-    //RMS calculations
+    // RMS calculations
     squareSum = (1.0f - rms_C) * squareSum + rms_C * in_l * in_l;
     rmsValue = sqrt(squareSum);
 
-    //Envelope follower calculations
-    // filteredAmplitude = filteredAmplitudeC * fabsf_neon(in_l) + (1 - filteredAmplitudeC) * filteredAmplitude;
+    // Envelope follower calculations
+    // filteredAmplitude = filteredAmplitudeC * fabsf_neon(in_l) + (1 -
+    // filteredAmplitudeC) * filteredAmplitude;
 
-    // float pitchedSample = interpolateFromRingBuffer(outputPointer, ringBuffer, ringBufferSize);
+    // float pitchedSample = interpolateFromRingBuffer(outputPointer,
+    // ringBuffer, ringBufferSize);
 
     float waveValue = osc.nextSample();
 
@@ -314,8 +319,8 @@ void render(BelaContext *context, void *userData)
 
     // combFilter.setFilterType(scope.getSliderValue(6));
     // float envToCutoff = scope.getSliderValue(9);
-    // float cutoffModulation = rmsValue * envToCutoff * 5000.0 - envToCutoff * 5000.0;
-    // float cutoff = scope.getSliderValue(7) + cutoffModulation;
+    // float cutoffModulation = rmsValue * envToCutoff * 5000.0 - envToCutoff *
+    // 5000.0; float cutoff = scope.getSliderValue(7) + cutoffModulation;
     // combFilter.setCutoff(cutoff);
     // combFilter.setResonance(scope.getSliderValue(8));
     // osc.setFrequency(synthPitch * 220.0);
@@ -341,32 +346,30 @@ void render(BelaContext *context, void *userData)
     // }
     // float tremoloSample = sinf_neon(phase);
     // tremoloSample = 0.5f * (tremoloSample + 1) * tremoloMix;
-    
+
     /// TESTING THE NEW PITCHSHIFTER
     pitchShifter.setPitchRatio(scope.getSliderValue(2));
     pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
     float pitchedSample;
-    // if ((int)scope.getSliderValue(6) == 1)
-    // {
-      // pitchedSample = pitchShifter.process(in_l);
-    // }
-    // else
-    // {
+    if ((int)scope.getSliderValue(6) == 1) {
+      pitchedSample = pitchShifter.process(in_l);
+    } else {
       pitchedSample = pitchShifter.PSOLA(in_l);
-    // }
+    }
 
     float waveThreshold = 0.016;
-    out_l = dryMix * in_l
-        //Noise for test purposes
-        // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) / static_cast<float>(RAND_MAX))
-        // just synth note for test
+    out_l =
+        dryMix * in_l
+        // Noise for test purposes
+        // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) /
+        // static_cast<float>(RAND_MAX)) just synth note for test
         // + synthMix * waveValue
         // + synthMix * max(rmsValue - waveThreshold, 0.0f) * waveValue
         // + synthMix * rmsValue * amdf.frequencyEstimateConfidence * waveValue
         // + synthMix * filteredAmplitude * waveValue
         // + synthMix * sinf_neon(pitchMix * in_l);
         + pitchMix * pitchedSample
-        //delay
+        // delay
         // + 0.2f * audioDelay.getSample()
         ;
 
@@ -374,13 +377,13 @@ void render(BelaContext *context, void *userData)
 
     // out_l = waveshaper.process(out_l);
 
-    //Apply tremolo/AM
+    // Apply tremolo/AM
     // out_l = out_l * (1.0 - tremoloSample);
 
     audioWrite(context, n, 0, out_l);
     audioWrite(context, n, 1, out_l);
 
-    //Increment all da pointers!!!!
+    // Increment all da pointers!!!!
     // ++inputPointer %= ringBufferSize;
 
     // outputPointer += outputPointerSpeed;
@@ -392,87 +395,81 @@ void render(BelaContext *context, void *userData)
     // crossfadeValue -= crossFadeIncrement;
     // crossfadeValue = max(crossfadeValue, 0.0f);
     amdf.process(in_l);
-    scope.log(
-      in_l,
-      out_l,
-      pitchShifter.grains[0].playheadNormalized,
-      // pitchShifter.grains[0].currentSample;
-      pitchShifter.grains[1].playheadNormalized,
-      // pitchShifter.grains[1].currentSample;
-      pitchShifter.grains[2].playheadNormalized,
-      // pitchShifter.grains[2].currentSample;
-      pitchShifter.grains[3].playheadNormalized,
-      // pitchShifter.grains[3].currentSample;
-      pitchShifter.grains[4].playheadNormalized,
-      // pitchShifter.grains[4].currentSample;
-      pitchShifter.grains[5].playheadNormalized
-      // pitchShifter.grains[5].currentSample;
-      // amdf.rmsValue,
-      // rmsValue
-      // amdf.amdfScore,
-      // amdf.progress,
-      // pitchedSample
-      // amdf.inputPointerProgress,
-      // amdf.pitchtrackingAmdfScore,
-      // pitchShifter.crossfadeValue
-      // float(testCounter)/500.0f,
-      // getBlackmanFast((testCounter++)-100, 200)
-      // amdf.weight
+
+    scope.log(in_l, out_l,
+              // pitchShifter.grains[0].playheadNormalized,
+              // pitchShifter.grains[0].currentSample;
+              // pitchShifter.grains[1].playheadNormalized,
+              // pitchShifter.grains[1].currentSample;
+              // pitchShifter.grains[2].playheadNormalized,
+              // pitchShifter.grains[2].currentSample;
+              // pitchShifter.grains[3].playheadNormalized,
+              // pitchShifter.grains[3].currentSample;
+              // pitchShifter.grains[4].playheadNormalized,
+              // pitchShifter.grains[4].currentSample;
+              // pitchShifter.grains[5].playheadNormalized,
+              // pitchShifter.grains[5].currentSample;
+              // amdf.rmsValue,
+              // rmsValue
+              amdf.amdfScore, amdf.progress,
+              // pitchedSample
+              // amdf.inputPointerProgress,
+              amdf.pitchtrackingAmdfScore,
+              // pitchShifter.crossfadeValue
+              // float(testCounter)/500.0f,
+              // getBlackmanFast((testCounter++)-100, 200)
+              // amdf.weight
+              pitchShifter.pitchMarkCandidateScopeDebug,
+              pitchShifter.pitchMarkScopeDebug, amdf.frequencyEstimate / 1000.0
+              // (pitchShifter.pitchMarkCandidateIndexOffset / 100.0),
+              // pitchShifter.pitchMarkCandidateValue
+
     );
 
-    // testCounter %= 500;
-    
-    // rt_printf("jumpLength: %i \n", pitchShifter.jumpLength);
-
-    if (amdf.amdfIsDone)
-    {
-      if (amdf.frequencyEstimate < highestTrackableFrequency)
-      {
+    if (amdf.amdfIsDone) {
+      if (amdf.frequencyEstimate < highestTrackableFrequency) {
         // osc.setFrequency(0.5f *amdf.frequencyEstimate);
         frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
         // osc.setFrequency(synthPitch * 0.5f * frequency);
       }
-      ////Parameters: (Search area start position, compare area end position)
-      // amdf.initiateAMDF(inputPointer - lowestTrackableNotePeriod, inputPointer); //, ringBuffer, ringBufferSize);
       amdf.initiateAMDF();
-      // rt_printf("nrOftestedSample: %f,     ", amdf.nrOfTestedSamplesInCorrelationWindow);
-      // rt_printf("correlationWindowSize: %i,     ", amdf.correlationWindowSize);
-      // rt_printf("searchWindowSize: %i,     ", amdf.searchWindowSize);
-      // rt_printf("amdfScore: %f \n", amdf.amdfScore);
 
-      // rt_printf("squareSum: %f \t rms: %f \n", amdf.squareSum, amdf.rmsValue);
       scope.trigger();
 
       pitchShifter.setJumpLength(amdf.jumpValue);
       pitchShifter.setPitchEstimatePeriod(amdf.pitchEstimate);
     }
 
-    if (pitchShifter.hasJumped)
-    {
+    if (pitchShifter.hasJumped) {
       // scope.trigger();
     }
 
-    // int distanceBetweenInOut = wrapBufferSample(inputPointer - (int)outputPointer, ringBufferSize);
-    // if (distanceBetweenInOut > ringBufferSize / 4)
+    // int distanceBetweenInOut = wrapBufferSample(inputPointer -
+    // (int)outputPointer, ringBufferSize); if (distanceBetweenInOut >
+    // ringBufferSize / 4)
     // {
-    //   fadingOutputPointerOffset = amdf.jumpValue; //We're gonna jump this far. so save the distance to be able to crossfade to were we are now.
-    //   outputPointer = wrapBufferSample(outputPointer + amdf.jumpValue, ringBufferSize);
-    //   // TODO: Better solution for avoiding divbyzero. Now we're using 1.1 to tackle that.
-    //   float pitchedSamplesUntilNewJump = (amdf.jumpValue / (1.1 - outputPointerSpeed));
-    //   crossFadeIncrement = 1.0f / pitchedSamplesUntilNewJump;
-    //   crossfadeValue = 1.0f;
+    //   fadingOutputPointerOffset = amdf.jumpValue; //We're gonna jump this
+    //   far. so save the distance to be able to crossfade to were we are now.
+    //   outputPointer = wrapBufferSample(outputPointer + amdf.jumpValue,
+    //   ringBufferSize);
+    //   // TODO: Better solution for avoiding divbyzero. Now we're using 1.1 to
+    //   tackle that. float pitchedSamplesUntilNewJump = (amdf.jumpValue / (1.1
+    //   - outputPointerSpeed)); crossFadeIncrement = 1.0f /
+    //   pitchedSamplesUntilNewJump; crossfadeValue = 1.0f;
     //   // scope.trigger();
     // }
 
-    // float outputPointerLocation = ((float)outputPointer) / ((float)ringBufferSize);
-    // float inputPointerLocation = ((float)inputPointer) / ((float)ringBufferSize);
+    // float outputPointerLocation = ((float)outputPointer) /
+    // ((float)ringBufferSize); float inputPointerLocation =
+    // ((float)inputPointer) / ((float)ringBufferSize);
 
     // tableIndex++;
     // tableIndex %= windowedSincTableSize;
     // float plottedSincTableValue = windowedSincTable[tableIndex];
-    // float grainPlayheadRatio = (float)pitchShifter.grains[0].playhead / ((float)pitchShifter.grains[0].length * 2.0f + 0.1f);
-    // rt_printf("ratio: %f \t playhead: %i \t length: %i \n", grainPlayheadRatio, pitchShifter.grains[0].playhead, pitchShifter.grains[0].length);
-    // if(
+    // float grainPlayheadRatio = (float)pitchShifter.grains[0].playhead /
+    // ((float)pitchShifter.grains[0].length * 2.0f + 0.1f); rt_printf("ratio:
+    // %f \t playhead: %i \t length: %i \n", grainPlayheadRatio,
+    // pitchShifter.grains[0].playhead, pitchShifter.grains[0].length); if(
     //    pitchShifter.fadeInGrain == pitchShifter.fadeOutGrain
     // || pitchShifter.freeGrain == pitchShifter.fadeInGrain
     // || pitchShifter.freeGrain == pitchShifter.fadeOutGrain
@@ -491,13 +488,11 @@ void render(BelaContext *context, void *userData)
     //           // pitchShifter.fadeInAmplitude,
     //           // pitchShifter.fadeOutAmplitude
     //           );
-    // scope.log(in_l, rmsValue, filteredAmplitude, amdf.frequencyEstimateConfidence, 0.5);
-    // scope.log(in_l, out_l);
+    // scope.log(in_l, rmsValue, filteredAmplitude,
+    // amdf.frequencyEstimateConfidence, 0.5); scope.log(in_l, out_l);
   }
   // rt_printf("magSum: %i, %i\n", ringBufferSize, amdf.bufferLength);
   // rt_printf("audio: %f, %f\n", in_l, out_l);
 }
 
-void cleanup(BelaContext *context, void *userData)
-{
-}
+void cleanup(BelaContext *context, void *userData) {}
