@@ -349,7 +349,7 @@ void render(BelaContext *context, void *userData) {
 
     /// TESTING THE NEW PITCHSHIFTER
     pitchShifter.setPitchRatio(scope.getSliderValue(2));
-    pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
+    // pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
     float pitchedSample;
     if ((int)scope.getSliderValue(6) == 1) {
       pitchedSample = pitchShifter.process(in_l);
@@ -396,7 +396,7 @@ void render(BelaContext *context, void *userData) {
     // crossfadeValue = max(crossfadeValue, 0.0f);
     amdf.process(in_l);
 
-    scope.log(in_l, out_l,
+    scope.log(in_l, out_l
               // pitchShifter.grains[0].playheadNormalized,
               // pitchShifter.grains[0].currentSample;
               // pitchShifter.grains[1].playheadNormalized,
@@ -411,16 +411,18 @@ void render(BelaContext *context, void *userData) {
               // pitchShifter.grains[5].currentSample;
               // amdf.rmsValue,
               // rmsValue
-              amdf.amdfScore, amdf.progress,
+              // amdf.amdfScore,
+              // amdf.progress,
               // pitchedSample
               // amdf.inputPointerProgress,
-              amdf.pitchtrackingAmdfScore,
+              // amdf.pitchtrackingAmdfScore,
               // pitchShifter.crossfadeValue
               // float(testCounter)/500.0f,
               // getBlackmanFast((testCounter++)-100, 200)
               // amdf.weight
-              pitchShifter.pitchMarkCandidateScopeDebug,
-              pitchShifter.pitchMarkScopeDebug, amdf.frequencyEstimate / 1000.0
+              // pitchShifter.pitchMarkCandidateScopeDebug,
+              // pitchShifter.pitchMarkScopeDebug,
+              // amdf.frequencyEstimate / 1000.0
               // (pitchShifter.pitchMarkCandidateIndexOffset / 100.0),
               // pitchShifter.pitchMarkCandidateValue
 

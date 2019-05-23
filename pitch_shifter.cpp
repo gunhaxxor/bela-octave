@@ -113,9 +113,10 @@ float PitchShifter::PSOLA(float inSample) {
   // the last one
   if (abs(pitchMarkCandidateIndexOffset) > pitchEstimatePeriod * 0.5f) {
     latestPitchMarkUsed = false;
-    pitchMarkValue = pitchMarkCandidateValue;
+    // pitchMarkValue = pitchMarkCandidateValue;
     pitchMarkCandidateValue = 0.f;
 
+    previousPitchmarkIndexOffset = pitchMarkIndexOffset;
     pitchMarkIndexOffset = pitchMarkCandidateIndexOffset;
     pitchMarkCandidateIndexOffset = 0;
 
@@ -186,10 +187,13 @@ float PitchShifter::PSOLA(float inSample) {
   int distanceFromLastGrain = wrapBufferSample(
       inputPointer - compareGrain->startIndex, inputRingBufferSize);
 
-  int grainSize = pitchEstimatePeriod * 2.0f;
+  // int grainSize = pitchEstimatePeriod * 2.0f;
+  int pitchMarkInterval = (pitchMarkIndexOffset - previousPitchmarkIndexOffset);
+  int grainSize = pitchMarkInterval * 2.0f;
   // ***************
   // Here we create the new grain.
-  if (distanceFromLastGrain >= pitchEstimatePeriod)
+  // if (distanceFromLastGrain >= pitchEstimatePeriod)
+  if (distanceFromLastGrain >= grainSize)
   // if(!latestPitchMarkUsed && abs(pitchMarkIndexOffset) > pitchEstimatePeriod)
   {
     // latestPitchMarkUsed = true;
@@ -197,6 +201,13 @@ float PitchShifter::PSOLA(float inSample) {
 
     // int startIndex = wrapBufferSample(
     //     compareGrain->startIndex + pitchEstimatePeriod, inputRingBufferSize);
+
+    // This is a bit weird. A lot of assumptions(!).
+    // We take the pitchmark, which should be one fourth in on a period if it is
+    // a sine wave. We assume that this is true for most waveshapes (not only
+    // sines). then we move 1/4 of the pitchestimate to the right. This should
+    // give us a zero crossing. Which would be a nice place to start (fade in) a
+    // grain.
     int startIndex =
         inputPointer + pitchMarkIndexOffset +
         pitchEstimatePeriod / 4; // Be aware that pitchMarkIndexOffset
@@ -221,7 +232,7 @@ float PitchShifter::PSOLA(float inSample) {
     newestGrain->startIndex = startIndex;
     newestGrain->endIndex = endIndex;
     newestGrain->length = length;
-    newestGrain->pitchPeriod = pitchEstimatePeriod / pitchRatio;
+    newestGrain->pitchPeriod = pitchMarkInterval / pitchRatio;
     newestGrain->playhead = 0;
 
     // rt_printf("Creating new grain. startIndex: %i, length: %i, pitchPeriod:
@@ -269,7 +280,7 @@ float PitchShifter::PSOLA(float inSample) {
       // TODO: Implement pitchmarks so we get most energy from source material!
       // TODO: Variable playback speed of grains (formants).
       grains[i].currentAmplitude =
-          getBlackmanFast(grains[i].playhead, grains[i].length);
+          getHannFast(grains[i].playhead, grains[i].length);
       float sample = inputRingBuffer[wrapBufferSample(
           grains[i].startIndex + grains[i].playhead, inputRingBufferSize)];
       grains[i].currentSample = grains[i].currentAmplitude * sample;
@@ -294,6 +305,8 @@ float PitchShifter::PSOLA(float inSample) {
   }
 
   samplesSinceLastGrainStarted++;
+
+  previousPitchmarkIndexOffset--;
   pitchMarkCandidateIndexOffset--;
   pitchMarkIndexOffset--;
 

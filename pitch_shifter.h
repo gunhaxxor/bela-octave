@@ -105,6 +105,8 @@ public:
   float pitchMarkCandidateValue = 0.f;
   int pitchMarkCandidateIndexOffset = 0;
 
+  int previousPitchmarkIndexOffset = 0;
+
   bool latestPitchMarkUsed = false;
   float pitchMarkValue = 0.0f;
   int pitchMarkIndexOffset = 0;
