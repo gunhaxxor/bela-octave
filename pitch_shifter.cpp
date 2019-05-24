@@ -181,9 +181,8 @@ float PitchShifter::PSOLA(float inSample) {
       inputPointer - compareGrain->startIndex, inputRingBufferSize);
 
   // int grainSize = pitchEstimatePeriod * 2.0f;
-  // int pitchMarkInterval = (pitchMarkIndexOffset -
-  // previousPitchmarkIndexOffset);
-  int pitchMarkInterval = highestTrackableNotePeriod;
+  int pitchMarkInterval = (pitchMarkIndexOffset - previousPitchmarkIndexOffset);
+  // int pitchMarkInterval = highestTrackableNotePeriod;
   int grainSize = pitchMarkInterval * 2.0f;
   // ***************
   // Here we create the new grain.
@@ -203,10 +202,10 @@ float PitchShifter::PSOLA(float inSample) {
     // sines). then we move 1/4 of the pitchestimate to the right. This should
     // give us a zero crossing. Which would be a nice place to start (fade in) a
     // grain.
-    int startIndex = inputPointer;
-    // int startIndex =
-    //     inputPointer + pitchMarkIndexOffset +
-    //     pitchEstimatePeriod / 4; // Be aware that pitchMarkIndexOffset
+    // int startIndex = inputPointer;
+    int startIndex =
+        inputPointer + pitchMarkIndexOffset +
+        pitchEstimatePeriod / 4; // Be aware that pitchMarkIndexOffset
     // will hold a negative value
     int length = grainSize;
     int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
