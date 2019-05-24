@@ -92,11 +92,23 @@ void Amdf::process(float inSample) {
   atLocalMinimi =
       previousPitchTrackingAmdfScores[0] < previousPitchTrackingAmdfScores[1] &&
       pitchtrackingAmdfScore > previousPitchTrackingAmdfScores[0];
+  float pitchPeriodFractionalOffset = 0;
   if (atLocalMinimi) {
     // weight -= weightIncrement*5;
     // weight += (pitchtrackingAmdfScore - previousPitchTrackingAmdfScores[0])
     // * 0.1f;
     weight += 0.05;
+
+    // A VEEERY crude way to estimate intersample position:
+    float a = previousPitchTrackingAmdfScores[1];
+    float b = previousPitchTrackingAmdfScores[0];
+    float c = pitchtrackingAmdfScore;
+    float leftRatio = a / b;
+    float rightRatio = c / b;
+    float total = leftRatio + rightRatio;
+    float normalizedInterSamplePos = leftRatio / total;
+    // convert from being between 0 and 1 to be between -1 and +1
+    pitchPeriodFractionalOffset = (normalizedInterSamplePos - 0.5f) * 2.0f;
   }
 
   previousPitchTrackingAmdfScores[1] = previousPitchTrackingAmdfScores[0];
@@ -104,7 +116,8 @@ void Amdf::process(float inSample) {
 
   if (pitchEstimateReady || (pitchtrackingAmdfScore < 0.25 && atLocalMinimi)) {
     pitchEstimateReady = true;
-    this->pitchEstimate = pitchtrackingBestIndexJump;
+    this->pitchEstimate =
+        pitchtrackingBestIndexJump + pitchPeriodFractionalOffset;
   }
 
   if (pitchtrackingAmdfScore < pitchtrackingBestSoFar) {

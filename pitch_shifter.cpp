@@ -124,22 +124,15 @@ float PitchShifter::PSOLA(float inSample) {
     pitchMarkCandidateScopeDebug = 0.f;
   }
 
+  // ************************
   // Should we jump to a new grain?
-  // TODO: When should we aaaactually jump?? Should we use the pitchperiod from
-  // when the grain was created or the latest pitchperiod?
   if (samplesSinceLastGrainStarted >= pitchPeriodOfLatestGrain) {
-    // rt_printf(".");
     // Time to start playback of a new grain
     if (newestGrain) {
-      // freeGrain = fadeOutGrain;
-      // fadeOutGrain = fadeInGrain;
-      // fadeInGrain = newestGrain;
-      // fadeInGrain->playhead = 0;
       assert(newestGrain->playhead == 0);
       assert(!newestGrain->isPlaying);
       latestStartedGrain = newestGrain;
       newestGrain->isPlaying = true;
-      // newestGrain->isStarted = true;
       pitchPeriodOfLatestGrain = newestGrain->pitchPeriod;
       newestGrain = nullptr;
       // rt_printf("starting a new grain\n");
@@ -188,12 +181,14 @@ float PitchShifter::PSOLA(float inSample) {
       inputPointer - compareGrain->startIndex, inputRingBufferSize);
 
   // int grainSize = pitchEstimatePeriod * 2.0f;
-  int pitchMarkInterval = (pitchMarkIndexOffset - previousPitchmarkIndexOffset);
+  // int pitchMarkInterval = (pitchMarkIndexOffset -
+  // previousPitchmarkIndexOffset);
+  int pitchMarkInterval = highestTrackableNotePeriod;
   int grainSize = pitchMarkInterval * 2.0f;
   // ***************
   // Here we create the new grain.
   // if (distanceFromLastGrain >= pitchEstimatePeriod)
-  if (distanceFromLastGrain >= grainSize)
+  if (distanceFromLastGrain >= pitchMarkInterval)
   // if(!latestPitchMarkUsed && abs(pitchMarkIndexOffset) > pitchEstimatePeriod)
   {
     // latestPitchMarkUsed = true;
@@ -208,10 +203,11 @@ float PitchShifter::PSOLA(float inSample) {
     // sines). then we move 1/4 of the pitchestimate to the right. This should
     // give us a zero crossing. Which would be a nice place to start (fade in) a
     // grain.
-    int startIndex =
-        inputPointer + pitchMarkIndexOffset +
-        pitchEstimatePeriod / 4; // Be aware that pitchMarkIndexOffset
-                                 // will hold a negative value
+    int startIndex = inputPointer;
+    // int startIndex =
+    //     inputPointer + pitchMarkIndexOffset +
+    //     pitchEstimatePeriod / 4; // Be aware that pitchMarkIndexOffset
+    // will hold a negative value
     int length = grainSize;
     int endIndex = wrapBufferSample(startIndex + length, inputRingBufferSize);
 
@@ -228,47 +224,13 @@ float PitchShifter::PSOLA(float inSample) {
       newestGrain->isPlaying = false;
     }
 
-    // newestGrain = freeGrain;
     newestGrain->startIndex = startIndex;
     newestGrain->endIndex = endIndex;
     newestGrain->length = length;
     newestGrain->pitchPeriod = pitchMarkInterval / pitchRatio;
     newestGrain->playhead = 0;
-
-    // rt_printf("Creating new grain. startIndex: %i, length: %i, pitchPeriod:
-    // %i \n", startIndex, length, newestGrain->pitchPeriod);
-
-    // if(noGrainIsPlaying && this->pitchEstimatePeriod != 0){
-    //   newestGrain->isPlaying = true;
-    //   rt_printf("starting the first grain!\n");
-    //   noGrainIsPlaying = false;
-    // }
   };
 
-  // assert(fadeInGrain != fadeOutGrain);
-  // assert(fadeOutGrain != freeGrain);
-  // assert(freeGrain != fadeInGrain);
-
-  // float fadeOutSample =
-  // inputRingBuffer[wrapBufferSample(fadeOutGrain->startIndex +
-  // fadeOutGrain->playhead, inputRingBufferSize)];
-
-  // float fadeInSample =
-  // inputRingBuffer[wrapBufferSample(fadeInGrain->startIndex +
-  // fadeInGrain->playhead, inputRingBufferSize)];
-
-  // fadeInGrain->currentAmplitude = hannCrossFade(crossfadeTime);
-  // fadeInGrain->currentAmplitude = getBlackmanFast(fadeInGrain->playhead,
-  // fadeInGrain->length);
-
-  // fadeOutGrain->currentAmplitude = hannCrossFade(-crossfadeTime);
-  // fadeOutGrain->currentAmplitude = getBlackmanFast(fadeOutGrain->playhead,
-  // fadeOutGrain->length);
-
-  // float combinedSample = fadeInGrain->currentAmplitude * fadeInSample +
-  // fadeOutGrain->currentAmplitude * fadeOutSample;
-
-  // crossfadeTime += 1.0f / 10;
   ++inputPointer %= inputRingBufferSize;
 
   float combinedSample = 0.0f;
@@ -276,9 +238,6 @@ float PitchShifter::PSOLA(float inSample) {
   // update all grains
   for (int i = 0; i < this->nrOfGrains; i++) {
     if (grains[i].isPlaying) {
-      // TODO: Use hann window?
-      // TODO: Implement pitchmarks so we get most energy from source material!
-      // TODO: Variable playback speed of grains (formants).
       grains[i].currentAmplitude =
           getHannFast(grains[i].playhead, grains[i].length);
       float sample = inputRingBuffer[wrapBufferSample(
@@ -291,17 +250,9 @@ float PitchShifter::PSOLA(float inSample) {
           (float)grains[i].playhead / (grains[i].length);
     }
 
-    // if(grains[i].isStarted){
-    //   grains[i].samplesSinceStarted++;
-    // }
-
     if (grains[i].isPlaying && grains[i].playhead >= grains[i].length) {
       grains[i].isPlaying = false;
     }
-    // grains[i].activeCounter++;
-    // grains[i].playhead = std::min(grains[i].playhead, grains[i].length);
-    // grains[i].currentAmplitude = getBlackmanFast(grains[i].playhead,
-    // grains[i].length);
   }
 
   samplesSinceLastGrainStarted++;
@@ -311,4 +262,37 @@ float PitchShifter::PSOLA(float inSample) {
   pitchMarkIndexOffset--;
 
   return combinedSample;
+}
+
+void setGrain(PitchShifter::grain *grain, int startIndex, int length,
+              int endIndex, int pitchPeriod) {
+  grain->startIndex = startIndex;
+  grain->length = length;
+  grain->endIndex = endIndex;
+  grain->pitchPeriod = pitchPeriod;
+
+  grain->playhead = 0;
+  grain->playheadNormalized = 0;
+  grain->isPlaying = false;
+}
+
+float updateGrain(PitchShifter::grain *grain, float *ringBuffer,
+                  int ringBufferSize) {
+  if (!grain->isPlaying) {
+    return 0.0f;
+  }
+
+  grain->currentAmplitude = getHannFast(grain->playhead, grain->length);
+  float sample = ringBuffer[wrapBufferSample(
+      grain->startIndex + grain->playhead, ringBufferSize)];
+  grain->currentSample = grain->currentAmplitude * sample;
+  grain->playhead++;
+
+  grain->playheadNormalized = (float)grain->playhead / (grain->length);
+
+  if (grain->playhead >= grain->length) {
+    grain->isPlaying = false;
+  }
+
+  return grain->currentSample;
 }
