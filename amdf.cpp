@@ -7,7 +7,8 @@
 // avoid it where not necessary.
 // void Amdf::initiateAMDF(int searchIndexStart, int compareIndexEnd) //, float
 // *sampleBuffer, int bufferLength)
-void Amdf::initiateAMDF() {
+void Amdf::initiateAMDF()
+{
   // this->sampleBuffer = sampleBuffer;
   // this->bufferLength = bufferLength;
 
@@ -36,7 +37,8 @@ void Amdf::initiateAMDF() {
   this->progress = 0.0f;
 }
 
-void Amdf::process(float inSample) {
+void Amdf::process(float inSample)
+{
 
   float squaredInSample = inSample * inSample;
   squareSum -= squareSumSamples[squareSumSamplesIndex];
@@ -62,7 +64,8 @@ void Amdf::process(float inSample) {
   this->inputPointerProgress =
       (float)this->inputPointer / (float)this->bufferLength;
 
-  if (amdfIsDone) {
+  if (amdfIsDone)
+  {
     return;
   }
 
@@ -72,14 +75,16 @@ void Amdf::process(float inSample) {
   for (int currentCompareIndex = compareIndexStart, i = 0;
        currentCompareIndex < compareIndexStop;
        currentCompareIndex += jumpLengthBetweenTestedSamples,
-           i += jumpLengthBetweenTestedSamples) {
+           i += jumpLengthBetweenTestedSamples)
+  {
     int k = wrapBufferSample(currentCompareIndex, bufferLength);
     int km = wrapBufferSample(currentSearchIndex + i, bufferLength);
     amdfScore += fabsf_neon(normalizedRingBuffer[km] - normalizedRingBuffer[k]);
     nrOfTestedSamplesInCorrelationWindow++;
   }
   this->amdfScore /= (float)nrOfTestedSamplesInCorrelationWindow;
-  if (amdfScore <= bestSoFar) {
+  if (amdfScore <= bestSoFar)
+  {
     bestSoFar = amdfScore;
     bestSoFarIndexJump = currentSearchIndex - compareIndexStart;
   }
@@ -93,7 +98,8 @@ void Amdf::process(float inSample) {
       previousPitchTrackingAmdfScores[0] < previousPitchTrackingAmdfScores[1] &&
       pitchtrackingAmdfScore > previousPitchTrackingAmdfScores[0];
   float pitchPeriodFractionalOffset = 0;
-  if (atLocalMinimi) {
+  if (atLocalMinimi)
+  {
     // weight -= weightIncrement*5;
     // weight += (pitchtrackingAmdfScore - previousPitchTrackingAmdfScores[0])
     // * 0.1f;
@@ -114,25 +120,33 @@ void Amdf::process(float inSample) {
   previousPitchTrackingAmdfScores[1] = previousPitchTrackingAmdfScores[0];
   previousPitchTrackingAmdfScores[0] = pitchtrackingAmdfScore;
 
-  if (pitchEstimateReady || (pitchtrackingAmdfScore < 0.25 && atLocalMinimi)) {
+  if (pitchEstimateReady || (pitchtrackingAmdfScore < 0.25 && atLocalMinimi))
+  {
     pitchEstimateReady = true;
     this->pitchEstimate =
         pitchtrackingBestIndexJump + pitchPeriodFractionalOffset;
   }
 
-  if (pitchtrackingAmdfScore < pitchtrackingBestSoFar) {
+  if (pitchtrackingAmdfScore < pitchtrackingBestSoFar)
+  {
     pitchtrackingBestSoFar = pitchtrackingAmdfScore;
     pitchtrackingBestIndexJump = currentSearchIndex - compareIndexStart;
-  } else {
+  }
+  else
+  {
   }
 
-  if (currentSearchIndex < searchIndexStop) {
+  if (currentSearchIndex < searchIndexStop)
+  {
     amdfIsDone = false;
-  } else {
+  }
+  else
+  {
     amdfIsDone = true;
 
     this->amdfValue = bestSoFar;
-    this->jumpValue = bestSoFarIndexJump;
+    // this->jumpValue = bestSoFarIndexJump;
+    this->jumpValue = this->pitchEstimate;
 
     // this->jumpDifference = filter_C * std::abs(this->jumpValue -
     // bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;

@@ -202,7 +202,8 @@ float in_l = 0, in_r = 0, out_l = 0, out_r = 0;
 //   return combinedSamples;
 // }
 
-bool setup(BelaContext *context, void *userData) {
+bool setup(BelaContext *context, void *userData)
+{
   // lowestTrackableNotePeriod = context->audioSampleRate /
   // LOWESTTRACKABLEFREQUENCY; highestTrackableNotePeriod =
   // context->audioSampleRate / HIGHESTTRACKABLEFREQUENCY; ringBufferSize =
@@ -210,13 +211,13 @@ bool setup(BelaContext *context, void *userData) {
 
   scope.setup(10, context->audioSampleRate, 7);
   // scope.setSlider(0, 1.0, 16.0, 0.00001, 1.0f);
-  scope.setSlider(0, 0.0, 1.0, 0.00001, 0.0f, "dry mix");
-  scope.setSlider(1, 0.0, 1.0, 0.00001, 1.0f, "pitch mix");
+  scope.setSlider(0, 0.0, 1.0, 0.00001, 0.4f, "dry mix");
+  scope.setSlider(1, 0.0, 1.0, 0.00001, .6f, "pitch mix");
   scope.setSlider(2, 0.25, 1.0, 0.00001, 0.5f, "pitch interval");
-  scope.setSlider(3, 0.0, 1.0, 0.00001, 0.5f, "synth mix");
-  scope.setSlider(4, 0.25, 2.0, 0.00001, 0.5f, "synth pitch");
-  scope.setSlider(5, 0.0, 4.0, 1.0, 0.0f, "synth waveform");
-  scope.setSlider(6, 0.0, 1.0, 1.0, 0.0f, "pitch shift type");
+  scope.setSlider(3, 0.0, 1.0, 1.0, 1.0f, "pitch shift type");
+  scope.setSlider(4, 0.0, 1.0, 0.00001, 0.f, "synth mix");
+  scope.setSlider(5, 0.25, 2.0, 0.00001, 0.5f, "synth pitch");
+  scope.setSlider(6, 0.0, 4.0, 1.0, 0.0f, "synth waveform");
   // scope.setSlider(7, 20.0, 10000.0, 0.1, 500.0, "filter cutoff");
   // scope.setSlider(8, 0.0f, 1.0f, 0.00001, 0.0f, "filter resonance");
   // scope.setSlider(9, 0.0f, 1.0f, 0.00001, 0.0f, "env to cutoff");
@@ -247,8 +248,10 @@ float filteredAmplitudeC = 0.002;
 float filteredAmplitude = 0.0f;
 
 // int testCounter = 0;
-void render(BelaContext *context, void *userData) {
-  for (unsigned int n = 0; n < context->audioFrames; n++) {
+void render(BelaContext *context, void *userData)
+{
+  for (unsigned int n = 0; n < context->audioFrames; n++)
+  {
     // read input, with dc blocking
     in_l = dcBlocker.filter(audioRead(context, n, 0));
     in_r = dcBlocker.filter(audioRead(context, n, 1));
@@ -268,7 +271,8 @@ void render(BelaContext *context, void *userData) {
     float sample = sin(sinePhase);
     in_l = sample;
 
-    if (sinePhase > M_PI) {
+    if (sinePhase > M_PI)
+    {
       sinePhase -= 2.0 * M_PI;
       // scope.trigger();
     }
@@ -351,9 +355,12 @@ void render(BelaContext *context, void *userData) {
     pitchShifter.setPitchRatio(scope.getSliderValue(2));
     // pitchShifter.setInterpolationsMode((int)scope.getSliderValue(6));
     float pitchedSample;
-    if ((int)scope.getSliderValue(6) == 1) {
+    if ((int)scope.getSliderValue(3) == 1)
+    {
       pitchedSample = pitchShifter.process(in_l);
-    } else {
+    }
+    else
+    {
       pitchedSample = pitchShifter.PSOLA(in_l);
     }
 
@@ -428,8 +435,10 @@ void render(BelaContext *context, void *userData) {
 
     );
 
-    if (amdf.amdfIsDone) {
-      if (amdf.frequencyEstimate < highestTrackableFrequency) {
+    if (amdf.amdfIsDone)
+    {
+      if (amdf.frequencyEstimate < highestTrackableFrequency)
+      {
         // osc.setFrequency(0.5f *amdf.frequencyEstimate);
         frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
         // osc.setFrequency(synthPitch * 0.5f * frequency);
@@ -442,7 +451,8 @@ void render(BelaContext *context, void *userData) {
       pitchShifter.setPitchEstimatePeriod(amdf.pitchEstimate);
     }
 
-    if (pitchShifter.hasJumped) {
+    if (pitchShifter.hasJumped)
+    {
       // scope.trigger();
     }
 
