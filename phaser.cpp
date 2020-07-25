@@ -1,5 +1,5 @@
 #include <cmath>
-#include <math_neon.h>
+#include <libraries/math_neon/math_neon.h>
 /* 
 Date: Mon, 24 Aug 1998 07:02:40 -0700
 Reply-To: music-dsp

@@ -4,9 +4,10 @@
 #include "filter.h"
 #include "utility.h"
 #include <cmath>
-#include <math_neon.h>
+#include <libraries/math_neon/math_neon.h>
 
-class Amdf {
+class Amdf
+{
 public:
   int jumpValue;
 
@@ -28,7 +29,8 @@ public:
   float inputPointerProgress = 0.0f;
   bool pitchEstimateReady = false;
 
-  Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal) {
+  Amdf(int longestExpectedPeriodOfSignal, int shortestExpectedPeriodOfSignal)
+  {
     correlationWindowSize = longestExpectedPeriodOfSignal * amdf_C;
 
     // The paper states this is the proper searchWindowSize:
@@ -53,7 +55,8 @@ public:
     this->lowestTrackableNotePeriod = longestExpectedPeriodOfSignal;
     this->highestTrackableNotePeriod = shortestExpectedPeriodOfSignal;
 
-    for (int i = 0; i < bufferLength; i++) {
+    for (int i = 0; i < bufferLength; i++)
+    {
       this->inputRingBuffer[i] = 0.0f;
       this->normalizedRingBuffer[i] = 0.0f;
       this->lowPassedRingBuffer[i] = 0.0f;
@@ -61,12 +64,14 @@ public:
 
     this->squareSumSamplesSize = lowestTrackableNotePeriod * 2;
     this->squareSumSamples = new float[squareSumSamplesSize];
-    for (int i = 0; i < squareSumSamplesSize; i++) {
+    for (int i = 0; i < squareSumSamplesSize; i++)
+    {
       this->squareSumSamples[i] = 0.0f;
     }
   }
 
-  void setup(int sampleRate) {
+  void setup(int sampleRate)
+  {
     this->sampleRate = sampleRate;
     lopass.setCutoff(this->sampleRate / highestTrackableNotePeriod);
     lopass.setResonance(3.0);
@@ -75,6 +80,7 @@ public:
   // *sampleBuffer, int bufferLength);
   void initiateAMDF();
   void process(float inSample);
+  float calculatePitchEstimate();
 
   // private:
   int lowestTrackableNotePeriod;

@@ -1,7 +1,7 @@
 #ifndef WAVESHAPER_H
 #define WAVESHAPER_H
 
-#include <math_neon.h>
+#include <libraries/math_neon/math_neon.h>
 #include <cmath>
 
 class Waveshaper

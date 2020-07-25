@@ -58,6 +58,6 @@ float Filter::lopassresProcess(float input)
   x = x + (input - y) * c;
   y = y + x;
   x = x * r;
-  output = y;
+  float output = y;
   return (output);
 }

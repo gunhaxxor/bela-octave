@@ -2,7 +2,7 @@
 #define FILTER_H
 
 #include <cmath>
-#include <math_neon.h>
+#include <libraries/math_neon/math_neon.h>
 
 class Filter
 {
@@ -10,8 +10,8 @@ public:
   enum filterTypeEnum
   {
     COMB,
-    LOPASSRES,
-    STATEVARIABLE
+    LOPASSRES
+    // STATEVARIABLE
   } filterType;
 
   // float amplitude = 0.5;
@@ -104,8 +104,6 @@ private:
   // float gain;
   float lopassresCutoff = 10000.0;
   float lopassresResonance = 0.0;
-  float input;
-  float output;
   // float inputs[10];
   // float outputs[10];
   // float cutoff1;

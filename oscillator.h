@@ -1,4 +1,5 @@
 #include <cmath>
+#include <libraries/math_neon/math_neon.h>
 
 // This oscillator is basically completely taken from here:
 // http://www.martin-finke.de/blog/articles/audio-plugins-018-polyblep-oscillator/

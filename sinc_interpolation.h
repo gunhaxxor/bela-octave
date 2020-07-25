@@ -1,7 +1,7 @@
 #ifndef SINC_INTERPOLATION_H
 #define SINC_INTERPOLATION_H
 
-#include <math_neon.h>
+#include <libraries/math_neon/math_neon.h>
 #include <cmath>
 #include "utility.h"
 #undef NDEBUG

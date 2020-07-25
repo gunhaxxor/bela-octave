@@ -1,21 +1,23 @@
 #ifndef PITCHSHIFTER_H
 #define PITCHSHIFTER_H
 
-#include "math_neon.h"
+#include <libraries/math_neon/math_neon.h>
 #include "sinc_interpolation.h"
 #include "utility.h"
 #include <cmath>
 
 #undef NDEBUG
 #include "filter.h"
-#include <Scope.h>
+#include <libraries/Scope/Scope.h>
 #include <algorithm>
 #include <assert.h>
 
-class PitchShifter {
+class PitchShifter
+{
 public:
   PitchShifter(int sampleRate, float lowestTrackableFrequency,
-               float highestTrackableFrequency, float pitchRatio) {
+               float highestTrackableFrequency, float pitchRatio)
+  {
     // this->scope = scope;
     this->sampleRate = sampleRate;
     this->lowestTrackableFrequency = lowestTrackableFrequency;
@@ -37,11 +39,13 @@ public:
     // latestStartedGrain->isPlaying = true;
   };
 
-  void setPitchRatio(float pitchRatio) {
+  void setPitchRatio(float pitchRatio)
+  {
     this->pitchRatio = fmin(1.0f, fmax(pitchRatio, 0.001f));
   };
   void setJumpLength(int jumpLength) { this->jumpLength = jumpLength; };
-  void setPitchEstimatePeriod(float period) {
+  void setPitchEstimatePeriod(float period)
+  {
     this->pitchEstimatePeriod = (float)period;
   };
   void setInterpolationsMode(int mode) { this->interpolationMode = mode; };
@@ -76,7 +80,8 @@ public:
 
   // PSOLA
   static const int nrOfGrains = 8;
-  struct grain {
+  struct grain
+  {
     // bool active;
     int startIndex = 0;
     int endIndex = 0;

@@ -36,6 +36,10 @@ void Amdf::initiateAMDF()
   this->requiredCyclesToComplete = searchWindowSize;
   this->progress = 0.0f;
 }
+float Amdf::calculatePitchEstimate()
+{
+  return 0.f;
+}
 
 void Amdf::process(float inSample)
 {
@@ -125,6 +129,7 @@ void Amdf::process(float inSample)
     pitchEstimateReady = true;
     this->pitchEstimate =
         pitchtrackingBestIndexJump + pitchPeriodFractionalOffset;
+    this->frequencyEstimate = float(this->sampleRate) / this->pitchEstimate;
   }
 
   if (pitchtrackingAmdfScore < pitchtrackingBestSoFar)
@@ -145,55 +150,55 @@ void Amdf::process(float inSample)
     amdfIsDone = true;
 
     this->amdfValue = bestSoFar;
-    // this->jumpValue = bestSoFarIndexJump;
-    this->jumpValue = this->pitchEstimate;
+    this->jumpValue = bestSoFarIndexJump;
 
-    // this->jumpDifference = filter_C * std::abs(this->jumpValue -
-    // bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
-    float newFreqEstimate = (this->sampleRate / pitchtrackingBestIndexJump);
-    float average_C = 0.3;
-    frequencyEstimateAveraged = average_C * newFreqEstimate +
-                                (1.0f - average_C) * frequencyEstimateAveraged;
+    // // this->jumpDifference = filter_C * std::abs(this->jumpValue -
+    // // bestSoFarIndexJump) + (1.0f - filter_C) * this->jumpDifference;
 
-    // float newPitchEstimate = 69 + 12 * logf_neon(newFreqEstimate/440.0f) *
-    // this->inverseLog_2; float newPitchEstimate = 0.5 *
-    // logf_neon(newFreqEstimate / 440.0f) * this->inverseLog_2;
-    // pitchEstimateAveraged = average_C * newPitchEstimate + (1.0f - average_C)
-    // * pitchEstimateAveraged;
+    // float newFreqEstimate = (this->sampleRate / pitchtrackingBestIndexJump);
+    // float average_C = 0.3;
+    // frequencyEstimateAveraged = average_C * newFreqEstimate +
+    //                             (1.0f - average_C) * frequencyEstimateAveraged;
 
-    // Calculate the change in semitones from the previous pitchestimate
-    float ratio = newFreqEstimate / this->previousFrequencyEstimate;
-    float semiTones = logf_neon(ratio) * this->inverseLog_2;
-    // float score = std::fmax(0.0f, 1.0f - (ratio - 1.0f) * 10);
-    // this->frequencyEstimateConfidence = std::fmax(1.0 -
-    // fabsf_neon(semiTones), 0.0f);
+    // // float newPitchEstimate = 69 + 12 * logf_neon(newFreqEstimate/440.0f) *
+    // // this->inverseLog_2; float newPitchEstimate = 0.5 *
+    // // logf_neon(newFreqEstimate / 440.0f) * this->inverseLog_2;
+    // // pitchEstimateAveraged = average_C * newPitchEstimate + (1.0f - average_C)
+    // // * pitchEstimateAveraged;
 
-    // this->frequencyEstimateConfidence = 1.0 -
-    // (std::fmin(fabsf_neon(semiTones), 1.0f));
+    // // Calculate the change in semitones from the previous pitchestimate
+    // float ratio = newFreqEstimate / this->previousFrequencyEstimate;
+    // float semiTones = logf_neon(ratio) * this->inverseLog_2;
+    // // float score = std::fmax(0.0f, 1.0f - (ratio - 1.0f) * 10);
+    // // this->frequencyEstimateConfidence = std::fmax(1.0 -
+    // // fabsf_neon(semiTones), 0.0f);
 
-    // TODO: Tune these parameters and possibly make the addition a choosable
-    // parameters.
-    // TODO: make the increase of confidence be exponential to duration of
-    // (almost) same pitch In order to make the volume come up real fast when we
-    // get a stable pitch track.
-    this->frequencyEstimateConfidence -= 0.8f * fabsf_neon(semiTones);
-    this->frequencyEstimateConfidence += 0.18;
-    this->frequencyEstimateConfidence =
-        std::fmin(1.0f, std::fmax(0.0f, this->frequencyEstimateConfidence));
+    // // this->frequencyEstimateConfidence = 1.0 -
+    // // (std::fmin(fabsf_neon(semiTones), 1.0f));
 
-    this->previousFrequencyEstimate = newFreqEstimate;
+    // // TODO: Tune these parameters and possibly make the addition a choosable
+    // // parameters.
+    // // TODO: make the increase of confidence be exponential to duration of
+    // // (almost) same pitch In order to make the volume come up real fast when we
+    // // get a stable pitch track.
+    // this->frequencyEstimateConfidence -= 0.8f * fabsf_neon(semiTones);
+    // this->frequencyEstimateConfidence += 0.18;
+    // this->frequencyEstimateConfidence =
+    //     std::fmin(1.0f, std::fmax(0.0f, this->frequencyEstimateConfidence));
 
-    // if (this->frequencyEstimateConfidence < 0.4)
-    // {
-    //   this->frequencyEstimateConfidence = 0.0;
-    // }
+    // this->previousFrequencyEstimate = newFreqEstimate;
 
-    float estimate_C = 0.3f;
-    // this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 -
-    // estimate_C) * this->frequencyEstimate;
-    this->frequencyEstimate = newFreqEstimate;
-    // this->pitchEstimate = estimate_C * newPitchEstimate + (1.0 - estimate_C)
-    // * this->pitchEstimate;
+    // // if (this->frequencyEstimateConfidence < 0.4)
+    // // {
+    // //   this->frequencyEstimateConfidence = 0.0;
+    // // }
+
+    // float estimate_C = 0.3f;
+    // // this->frequencyEstimate = estimate_C * newFreqEstimate + (1.0 -
+    // // estimate_C) * this->frequencyEstimate;
+    // this->frequencyEstimate = newFreqEstimate;
+    // // this->pitchEstimate = estimate_C * newPitchEstimate + (1.0 - estimate_C)
+    // // * this->pitchEstimate;
   }
 
   currentSearchIndex++;

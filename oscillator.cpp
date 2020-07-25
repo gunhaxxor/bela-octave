@@ -1,5 +1,4 @@
 #include "oscillator.h"
-#include <math_neon.h>
 
 void Oscillator::setMode(OscillatorMode mode)
 {
@@ -56,7 +55,7 @@ float Oscillator::polyBLEP(float t)
 
 float Oscillator::naiveWaveform()
 {
-    float value;
+    float value = 0.f;
     switch (mOscillatorMode)
     {
     case OSCILLATOR_MODE_SINE:
