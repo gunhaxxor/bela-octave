@@ -36,6 +36,7 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include "filter.h"
 #include "oscillator.h"
 #include "pitch_shifter.h"
+#include "pitch_detector.h"
 #include "waveshaper.h"
 
 #include "amdf.h"
@@ -44,7 +45,7 @@ The Bela software is distributed under the GNU Lesser General Public License
 
 float inverseSampleRate;
 
-float sinePhase = 0;
+// float sinePhase = 0;
 float sineFrequency = 400;
 
 Scope scope;
@@ -66,7 +67,7 @@ const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
 int inputPointer = 0;
 
 // RMS stuff
-const float rms_C = 0.0005;
+const float rms_C = 0.005;
 float squareSum = 0;
 float rmsValue = 0;
 
@@ -80,6 +81,8 @@ Filter combFilter = Filter(SAMPLERATE, Filter::COMB);
 Waveshaper waveshaper = Waveshaper(Waveshaper::TANH);
 
 PitchShifter pitchShifter = PitchShifter(SAMPLERATE, 95.0f, 800.0f, 0.5f);
+
+PitchDetector pitchDetector = PitchDetector(SAMPLERATE, lowestTrackableFrequency, highestTrackableFrequency);
 
 float bypassProcess(float inSample) { return inSample; }
 
@@ -107,7 +110,7 @@ bool setup(BelaContext *context, void *userData)
   pitchMixSliderIdx = controller.addSlider("pitch mix", 0.2f, 0.0, 1.0, 0.00001);
   pitchIntervalSliderIdx = controller.addSlider("pitch interval", 0.5f, 0.25, 1.0, 0.00001);
   pitchTypeSliderIdx = controller.addSlider("pitch shift type", 1.0f, 0.0, 1.0, 1.0);
-  synthMixSliderIdx = controller.addSlider("synth mix", 0.0f, 0.0, 1.0, 0.00001);
+  synthMixSliderIdx = controller.addSlider("synth mix", 0.1f, 0.0, 1.0, 0.00001);
   synthPitchSliderIdx = controller.addSlider("synth pitch", 0.5f, 0.25, 2.0, 0.00001);
   synthWaveformSliderIdx = controller.addSlider("synth waveform", 0.0f, 0.0, 4.0, 1.0);
 
@@ -155,15 +158,24 @@ void render(BelaContext *context, void *userData)
 
     // float factor = scope.getSliderValue(0);
     // Create sine wave
+    static float sinePhase = 0;
     sinePhase += 2.0 * M_PI * sineFrequency * inverseSampleRate;
-    // float sample = sinePhase;
-    float sample = sin(sinePhase);
-    in_l = sample;
+
+    static float sinePhase2 = 0;
+    sinePhase2 += 2.0 * M_PI * sineFrequency * 0.5 * inverseSampleRate;
+
+    float sineSample = sin(sinePhase);
+    float sineSample2 = sin(sinePhase2);
+
+    // in_l = sineSample * 0.4f + sineSample2 * 0.2;
 
     if (sinePhase > M_PI)
     {
       sinePhase -= 2.0 * M_PI;
-      // scope.trigger();
+    }
+    if (sinePhase2 > M_PI)
+    {
+      sinePhase2 -= 2.0 * M_PI;
     }
 
     sineFrequency += 0.0001;
@@ -246,18 +258,17 @@ void render(BelaContext *context, void *userData)
     //   pitchedSample = pitchShifter.PSOLA(in_l);
     // }
 
-    float waveThreshold = 0.016;
+    pitchDetector.process(in_l);
+    if (110.f < pitchDetector.getFrequency() && pitchDetector.getFrequency() < highestTrackableFrequency)
+    {
+      osc.setFrequency(synthPitch * pitchDetector.getFrequency());
+    }
+
     out_l =
         dryMix * in_l
         // Noise for test purposes
         // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) /
-        // static_cast<float>(RAND_MAX)) just synth note for test
-        // + synthMix * waveValue
-        + synthMix * max(rmsValue - waveThreshold, 0.0f) * waveValue
-        // + synthMix * rmsValue * amdf.frequencyEstimateConfidence * waveValue
-        // + synthMix * filteredAmplitude * waveValue
-        // + synthMix * sinf_neon(pitchMix * in_l);
-        + pitchMix * pitchedSample
+        + synthMix * rmsValue * waveValue + pitchMix * pitchedSample
         // delay
         // + 0.2f * audioDelay.getSample()
         ;
@@ -275,6 +286,10 @@ void render(BelaContext *context, void *userData)
     amdf.process(in_l);
 
     scope.log(in_l, out_l,
+              pitchDetector.getProcessedSample(),
+              pitchDetector.getRMS(in_l),
+              pitchDetector.getTriggerSample(),
+              pitchDetector.getFrequency() * 0.001
               // pitchShifter.grains[0].playheadNormalized,
               // pitchShifter.grains[0].currentSample;
               // pitchShifter.grains[1].playheadNormalized,
@@ -293,7 +308,7 @@ void render(BelaContext *context, void *userData)
               // amdf.progress,
               // pitchedSample
               // amdf.inputPointerProgress,
-              amdf.pitchtrackingAmdfScore,
+              // amdf.pitchtrackingAmdfScore,
               // amdf.pitchEstimate,
               // pitchShifter.crossfadeValue
               // float(testCounter)/500.0f,
@@ -301,7 +316,7 @@ void render(BelaContext *context, void *userData)
               // amdf.weight
               // pitchShifter.pitchMarkCandidateScopeDebug,
               // pitchShifter.pitchMarkScopeDebug,
-              amdf.frequencyEstimate / 1000.0
+              // amdf.frequencyEstimate / 1000.0
               // (pitchShifter.pitchMarkCandidateIndexOffset / 100.0),
               // pitchShifter.pitchMarkCandidateValue
 
@@ -315,7 +330,7 @@ void render(BelaContext *context, void *userData)
       // osc.setFrequency(synthPitch * 0.5f * frequency);
     }
 
-    osc.setFrequency(synthPitch * 0.5f * amdf.frequencyEstimate);
+    // osc.setFrequency(synthPitch * 0.5f * amdf.frequencyEstimate);
 
     if (amdf.amdfIsDone)
     {
