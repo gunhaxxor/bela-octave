@@ -39,6 +39,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include "pitch_detector.h"
 #include "waveshaper.h"
 
+// #include <q/pitch/pitch_detector.hpp>
+
 #include "amdf.h"
 #include "dc_blocker.h"
 #include "sinc_interpolation.h"
@@ -112,7 +114,7 @@ bool setup(BelaContext *context, void *userData)
   pitchTypeSliderIdx = controller.addSlider("pitch shift type", 1.0f, 0.0, 1.0, 1.0);
   synthMixSliderIdx = controller.addSlider("synth mix", 0.1f, 0.0, 1.0, 0.00001);
   synthPitchSliderIdx = controller.addSlider("synth pitch", 0.5f, 0.25, 2.0, 0.00001);
-  synthWaveformSliderIdx = controller.addSlider("synth waveform", 0.0f, 0.0, 4.0, 1.0);
+  synthWaveformSliderIdx = controller.addSlider("synth waveform", 2.0f, 0.0, 4.0, 1.0);
 
   // controller.addSlider("filter cutoff", 0.0f, 20.0, 10000.0, 0.1);
   // controller.addSlider("filter resonance", 0.0f, 0.0f, 1.0f, 0.00001);
@@ -268,7 +270,9 @@ void render(BelaContext *context, void *userData)
         dryMix * in_l
         // Noise for test purposes
         // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) /
-        + synthMix * rmsValue * waveValue + pitchMix * pitchedSample
+        + synthMix * rmsValue * pitchDetector.getConfidence() * waveValue
+        //
+        + pitchMix * pitchedSample
         // delay
         // + 0.2f * audioDelay.getSample()
         ;
@@ -285,40 +289,43 @@ void render(BelaContext *context, void *userData)
 
     amdf.process(in_l);
 
-    scope.log(in_l, out_l,
-              pitchDetector.getProcessedSample(),
-              pitchDetector.getRMS(in_l),
-              pitchDetector.getTriggerSample(),
-              pitchDetector.getFrequency() * 0.001
-              // pitchShifter.grains[0].playheadNormalized,
-              // pitchShifter.grains[0].currentSample;
-              // pitchShifter.grains[1].playheadNormalized,
-              // pitchShifter.grains[1].currentSample;
-              // pitchShifter.grains[2].playheadNormalized,
-              // pitchShifter.grains[2].currentSample;
-              // pitchShifter.grains[3].playheadNormalized,
-              // pitchShifter.grains[3].currentSample;
-              // pitchShifter.grains[4].playheadNormalized,
-              // pitchShifter.grains[4].currentSample;
-              // pitchShifter.grains[5].playheadNormalized,
-              // pitchShifter.grains[5].currentSample;
-              // amdf.rmsValue,
-              // rmsValue
-              // amdf.amdfScore,
-              // amdf.progress,
-              // pitchedSample
-              // amdf.inputPointerProgress,
-              // amdf.pitchtrackingAmdfScore,
-              // amdf.pitchEstimate,
-              // pitchShifter.crossfadeValue
-              // float(testCounter)/500.0f,
-              // getBlackmanFast((testCounter++)-100, 200)
-              // amdf.weight
-              // pitchShifter.pitchMarkCandidateScopeDebug,
-              // pitchShifter.pitchMarkScopeDebug,
-              // amdf.frequencyEstimate / 1000.0
-              // (pitchShifter.pitchMarkCandidateIndexOffset / 100.0),
-              // pitchShifter.pitchMarkCandidateValue
+    scope.log(
+        in_l,
+        // out_l,
+        pitchDetector.getProcessedSample(),
+        pitchDetector.getRMS(),
+        pitchDetector.getTriggerSample(),
+        // pitchDetector.getFrequency() * 0.001,
+        pitchDetector.getConfidence()
+        // pitchShifter.grains[0].playheadNormalized,
+        // pitchShifter.grains[0].currentSample;
+        // pitchShifter.grains[1].playheadNormalized,
+        // pitchShifter.grains[1].currentSample;
+        // pitchShifter.grains[2].playheadNormalized,
+        // pitchShifter.grains[2].currentSample;
+        // pitchShifter.grains[3].playheadNormalized,
+        // pitchShifter.grains[3].currentSample;
+        // pitchShifter.grains[4].playheadNormalized,
+        // pitchShifter.grains[4].currentSample;
+        // pitchShifter.grains[5].playheadNormalized,
+        // pitchShifter.grains[5].currentSample;
+        // amdf.rmsValue,
+        // rmsValue
+        // amdf.amdfScore,
+        // amdf.progress,
+        // pitchedSample
+        // amdf.inputPointerProgress,
+        // amdf.pitchtrackingAmdfScore,
+        // amdf.pitchEstimate,
+        // pitchShifter.crossfadeValue
+        // float(testCounter)/500.0f,
+        // getBlackmanFast((testCounter++)-100, 200)
+        // amdf.weight
+        // pitchShifter.pitchMarkCandidateScopeDebug,
+        // pitchShifter.pitchMarkScopeDebug,
+        // amdf.frequencyEstimate / 1000.0
+        // (pitchShifter.pitchMarkCandidateIndexOffset / 100.0),
+        // pitchShifter.pitchMarkCandidateValue
 
     );
 
