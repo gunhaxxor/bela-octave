@@ -31,24 +31,26 @@ The Bela software is distributed under the GNU Lesser General Public License
 #undef NDEBUG
 #include <cassert>
 
+#include "audio_effect_interface.hpp"
 #include "utility.h"
 #include "delay.h"
 #include "filter.h"
 #include "oscillator.h"
 #include "pitch_shifter.h"
-#include "pitch_detector.h"
+#include "pitchfollowing_tremolo.hpp"
+// #include "pitch_detector.h"
 #include "waveshaper.h"
 
-// #include <q/pitch/pitch_detector.hpp>
+#include <q/pitch/pitch_detector.hpp>
+#include <q/support/literals.hpp>
+namespace q = cycfi::q;
+using namespace q::literals;
 
-#include "amdf.h"
+// #include "amdf.h"
 #include "dc_blocker.h"
 #include "sinc_interpolation.h"
 
 float inverseSampleRate;
-
-// float sinePhase = 0;
-float sineFrequency = 400;
 
 Scope scope;
 Gui gui;
@@ -62,7 +64,7 @@ DcBlocker dcBlocker;
 #define SAMPLERATE 44100
 
 const int lowestTrackableFrequency = 95;
-const int highestTrackableFrequency = 1000;
+const int highestTrackableFrequency = 1200;
 const int lowestTrackableNotePeriod = SAMPLERATE / lowestTrackableFrequency;
 const int highestTrackableNotePeriod = SAMPLERATE / highestTrackableFrequency;
 
@@ -73,28 +75,28 @@ const float rms_C = 0.005;
 float squareSum = 0;
 float rmsValue = 0;
 
-// Amdf stuff
-Amdf amdf = Amdf(lowestTrackableNotePeriod, highestTrackableNotePeriod);
-
 Delay audioDelay = Delay(SAMPLERATE, 1.0f);
+
+PitchFollowingTremolo tremolo = PitchFollowingTremolo(SAMPLERATE);
 
 Filter combFilter = Filter(SAMPLERATE, Filter::COMB);
 
 Waveshaper waveshaper = Waveshaper(Waveshaper::TANH);
 
+q::pitch_detector pd(lowestTrackableFrequency, highestTrackableFrequency, SAMPLERATE, -45_dB);
+
 PitchShifter pitchShifter = PitchShifter(SAMPLERATE, 95.0f, 800.0f, 0.5f);
 
-PitchDetector pitchDetector = PitchDetector(SAMPLERATE, lowestTrackableFrequency, highestTrackableFrequency);
+BypassEffect bypass = BypassEffect();
 
-float bypassProcess(float inSample) { return inSample; }
-
-float (*effectSlots[])(float) = {&bypassProcess, &bypassProcess, &bypassProcess,
-                                 &bypassProcess, &bypassProcess, &bypassProcess,
-                                 &bypassProcess, &bypassProcess};
+AudioEffect *effectSlots[] = {&bypass, &bypass, &bypass,
+                              &bypass, &bypass, &bypass,
+                              &bypass, &bypass};
+int effectSlotsSize = sizeof(effectSlots) / sizeof(effectSlots[0]);
 
 float in_l = 0, in_r = 0, out_l = 0, out_r = 0;
 
-unsigned int dryMixSliderIdx, pitchMixSliderIdx, pitchIntervalSliderIdx, pitchTypeSliderIdx, synthMixSliderIdx, synthPitchSliderIdx, synthWaveformSliderIdx;
+unsigned int dryMixSliderIdx, pitchMixSliderIdx, pitchIntervalSliderIdx, pitchTypeSliderIdx, synthMixSliderIdx, synthPitchSliderIdx, synthWaveformSliderIdx, tremoloFrequencyIdx, tremoloIntensityIdx, tremoloPitchFollowAmountIdx;
 
 bool setup(BelaContext *context, void *userData)
 {
@@ -109,25 +111,25 @@ bool setup(BelaContext *context, void *userData)
   // Arguments: name, default value, minimum, maximum, increment
   // store the return value to read from the slider later on
   dryMixSliderIdx = controller.addSlider("dry mix", 0.1f, 0.0, 1.0, 0.00001);
-  pitchMixSliderIdx = controller.addSlider("pitch mix", 0.2f, 0.0, 1.0, 0.00001);
+  pitchMixSliderIdx = controller.addSlider("pitch mix", 0.3f, 0.0, 1.0, 0.00001);
   pitchIntervalSliderIdx = controller.addSlider("pitch interval", 0.5f, 0.25, 1.0, 0.00001);
   pitchTypeSliderIdx = controller.addSlider("pitch shift type", 1.0f, 0.0, 1.0, 1.0);
-  synthMixSliderIdx = controller.addSlider("synth mix", 0.1f, 0.0, 1.0, 0.00001);
+  synthMixSliderIdx = controller.addSlider("synth mix", 0.0f, 0.0, 1.0, 0.00001);
   synthPitchSliderIdx = controller.addSlider("synth pitch", 0.5f, 0.25, 2.0, 0.00001);
   synthWaveformSliderIdx = controller.addSlider("synth waveform", 2.0f, 0.0, 4.0, 1.0);
-
-  // controller.addSlider("filter cutoff", 0.0f, 20.0, 10000.0, 0.1);
-  // controller.addSlider("filter resonance", 0.0f, 0.0f, 1.0f, 0.00001);
-  // controller.addSlider("env to cutoff", 0.0f, 0.0f, 1.0f, 0.00001);
+  tremoloFrequencyIdx = controller.addSlider("tremolo frequency", 2.0f, 0.1, 200.0, 0.001);
+  tremoloIntensityIdx = controller.addSlider("tremolo intensity", 0.8f, 0.0f, 1.0f, 0.00001);
+  tremoloPitchFollowAmountIdx = controller.addSlider("tremoloPitchFollow", 0.0f, 0.0f, 2.0f, 0.00001);
   // controller.addSlider("shaper type", 0.0f, 0.0f, 3.0f, 1.0);
   // controller.addSlider("shaper drive", 1.0f, 0.0f, 10.0f, 0.00001);
+
+  // effectSlots[0] = &pitchShifter;
+  // effectSlots[1] = &audioDelay;
+  effectSlots[2] = &tremolo;
 
   inverseSampleRate = 1.0 / context->audioSampleRate;
 
   initializeWindowedSincTable();
-
-  amdf.setup(context->audioSampleRate);
-  amdf.initiateAMDF();
   return true;
 }
 
@@ -153,38 +155,7 @@ void render(BelaContext *context, void *userData)
     // combine input channels
     in_l += in_r;
 
-    // //bypass
-    // audioWrite(context, n, 0, audioRead(context, n, 0));
-    // audioWrite(context, n, 1, audioRead(context, n, 1));
-    // continue;
-
-    // float factor = scope.getSliderValue(0);
-    // Create sine wave
-    static float sinePhase = 0;
-    sinePhase += 2.0 * M_PI * sineFrequency * inverseSampleRate;
-
-    static float sinePhase2 = 0;
-    sinePhase2 += 2.0 * M_PI * sineFrequency * 0.5 * inverseSampleRate;
-
-    float sineSample = sin(sinePhase);
-    float sineSample2 = sin(sinePhase2);
-
-    // in_l = sineSample * 0.4f + sineSample2 * 0.2;
-
-    if (sinePhase > M_PI)
-    {
-      sinePhase -= 2.0 * M_PI;
-    }
-    if (sinePhase2 > M_PI)
-    {
-      sinePhase2 -= 2.0 * M_PI;
-    }
-
-    sineFrequency += 0.0001;
-    if (sineFrequency > 881.0)
-      sineFrequency = 105.0;
-
-    audioDelay.insertSample(in_l);
+    // audioDelay.insertSample(in_l);
 
     // RMS calculations
     squareSum = (1.0f - rms_C) * squareSum + rms_C * in_l * in_l;
@@ -235,135 +206,61 @@ void render(BelaContext *context, void *userData)
     //   oscAmplitude += 2 * oscAmplitudeIncrement;
     // }
 
-    // // follows tracked pitch
-    // phase += tremoloPitch * 2.0 * M_PI * frequency * inverseSampleRate;
-    // // doesn't track pitch
-    // // phase += tremoloPitch * 2.0 * M_PI * 200.0 * inverseSampleRate;
-
-    // if (phase > M_PI)
-    // {
-    //   phase -= 2.0 * M_PI;
-    // }
-    // float tremoloSample = sinf_neon(phase);
-    // tremoloSample = 0.5f * (tremoloSample + 1) * tremoloMix;
+    tremolo.setBaseFrequency(controller.getSliderValue(tremoloFrequencyIdx));
+    tremolo.setPitchFollowAmount(controller.getSliderValue(tremoloPitchFollowAmountIdx));
+    tremolo.setIntensity(controller.getSliderValue(tremoloIntensityIdx));
 
     /// TESTING THE NEW PITCHSHIFTER
-    // pitchShifter.setPitchRatio(controller.getSliderValue(2));
-    // pitchShifter.setInterpolationsMode((int)controller.getSliderValue(6));
+    pitchShifter.setPitchRatio(controller.getSliderValue(pitchIntervalSliderIdx));
+    float pitchShifterType = controller.getSliderValue(pitchTypeSliderIdx);
     float pitchedSample = 0.f;
-    // if ((int)controller.getSliderValue(3) == 1)
-    // {
-    //   pitchedSample = pitchShifter.process(in_l);
-    // }
-    // else
-    // {
-    //   pitchedSample = pitchShifter.PSOLA(in_l);
-    // }
+    // pitchedSample = pitchShifter.process(in_l);
 
-    pitchDetector.process(in_l);
-    if (110.f < pitchDetector.getFrequency() && pitchDetector.getFrequency() < highestTrackableFrequency)
+    bool pdIsReady = pd(in_l);
+    static float trackedFrequency = 0.f;
+    if (pdIsReady)
     {
-      osc.setFrequency(synthPitch * pitchDetector.getFrequency());
+      trackedFrequency = pd.get_frequency();
+      tremolo.setFollowedPitch(trackedFrequency);
+      float period = SAMPLERATE / trackedFrequency;
+      if (pitchShifterType > 0.5f)
+      {
+        pitchShifter.setJumpLength(period);
+      }
     }
 
-    out_l =
-        dryMix * in_l
-        // Noise for test purposes
-        // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) /
-        + synthMix * rmsValue * pitchDetector.getConfidence() * waveValue
-        //
-        + pitchMix * pitchedSample
-        // delay
-        // + 0.2f * audioDelay.getSample()
-        ;
+    osc.setFrequency(synthPitch * trackedFrequency);
+
+    for (int i = 0; i < effectSlotsSize; i++)
+    {
+      in_l = effectSlots[i]->process(in_l);
+    }
+    out_l = in_l;
+
+    // out_l =
+    //     dryMix * in_l
+    //     // Noise for test purposes
+    //     // + synthMix * (-1.0f + 2.0 * static_cast<float>(rand()) /
+    //     + synthMix * rmsValue * waveValue
+    //     //
+    //     + pitchMix * pitchedSample;
+    //delay
+    // + 0.2f * audioDelay.getSample();
 
     // out_l = combFilter.process(out_l);
 
     // out_l = waveshaper.process(out_l);
 
-    // Apply tremolo/AM
-    // out_l = out_l * (1.0 - tremoloSample);
-
     audioWrite(context, n, 0, out_l);
     audioWrite(context, n, 1, out_l);
 
-    amdf.process(in_l);
-
     scope.log(
         in_l,
-        // out_l,
-        pitchDetector.getProcessedSample(),
-        pitchDetector.getRMS(),
-        pitchDetector.getTriggerSample(),
-        // pitchDetector.getFrequency() * 0.001,
-        pitchDetector.getConfidence()
-        // pitchShifter.grains[0].playheadNormalized,
-        // pitchShifter.grains[0].currentSample;
-        // pitchShifter.grains[1].playheadNormalized,
-        // pitchShifter.grains[1].currentSample;
-        // pitchShifter.grains[2].playheadNormalized,
-        // pitchShifter.grains[2].currentSample;
-        // pitchShifter.grains[3].playheadNormalized,
-        // pitchShifter.grains[3].currentSample;
-        // pitchShifter.grains[4].playheadNormalized,
-        // pitchShifter.grains[4].currentSample;
-        // pitchShifter.grains[5].playheadNormalized,
-        // pitchShifter.grains[5].currentSample;
-        // amdf.rmsValue,
-        // rmsValue
-        // amdf.amdfScore,
-        // amdf.progress,
-        // pitchedSample
-        // amdf.inputPointerProgress,
-        // amdf.pitchtrackingAmdfScore,
-        // amdf.pitchEstimate,
-        // pitchShifter.crossfadeValue
-        // float(testCounter)/500.0f,
-        // getBlackmanFast((testCounter++)-100, 200)
-        // amdf.weight
-        // pitchShifter.pitchMarkCandidateScopeDebug,
-        // pitchShifter.pitchMarkScopeDebug,
-        // amdf.frequencyEstimate / 1000.0
-        // (pitchShifter.pitchMarkCandidateIndexOffset / 100.0),
-        // pitchShifter.pitchMarkCandidateValue
-
-    );
-
-    if (amdf.pitchEstimateReady)
-    {
-      // gui.sendBuffer(0, amdf.pitchEstimateReady);
-      // rt_printf("pitchEstimated: %f\n", amdf.pitchEstimate);
-      // frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
-      // osc.setFrequency(synthPitch * 0.5f * frequency);
-    }
-
-    // osc.setFrequency(synthPitch * 0.5f * amdf.frequencyEstimate);
-
-    if (amdf.amdfIsDone)
-    {
-      if (amdf.frequencyEstimate < highestTrackableFrequency)
-      {
-        // osc.setFrequency(0.5f * amdf.frequencyEstimate);
-        // frequency = 440.0f * powf_neon(2, 2 * amdf.pitchEstimate);
-        // osc.setFrequency(synthPitch * 0.5f * frequency);
-      }
-      amdf.initiateAMDF();
-
-      scope.trigger();
-
-      pitchShifter.setJumpLength(amdf.jumpValue);
-      pitchShifter.setPitchEstimatePeriod(amdf.pitchEstimate);
-    }
-
-    if (pitchShifter.hasJumped)
-    {
-      // scope.trigger();
-    }
+        out_l,
+        trackedFrequency * 0.001);
   }
   // rt_printf("magSum: %i, %i\n", ringBufferSize, amdf.bufferLength);
   // rt_printf("audio: %f, %f\n", in_l, out_l);
-
-  // gui.sendBuffer(0, amdf.pitchEstimateReady);
 }
 
 void cleanup(BelaContext *context, void *userData) {}

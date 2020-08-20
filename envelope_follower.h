@@ -1,13 +1,16 @@
 #include <cmath>
 #include <math_neon.h>
 
-class EnvelopeFollower{
+class EnvelopeFollower
+{
 public:
-
-
-  EnvelopeFollower(){
-    
+  EnvelopeFollower()
+  {
   }
-private:
 
+  process(float inSample)
+  {
+  }
+
+private:
 }

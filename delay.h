@@ -1,12 +1,13 @@
 #include <cmath>
 #include <libraries/math_neon/math_neon.h>
+#include "audio_effect_interface.hpp"
 
-class Delay
+class Delay : public AudioEffect
 {
 public:
-  float delayTime = 0.03;
+  float delayTime = 0.1;
 
-  float feedback = 0.9;
+  float feedback = 0.5;
   // float amplitude = 0.5;
   Delay(int sampleRate, float maxDelayTime)
   {
@@ -20,7 +21,26 @@ public:
   {
     delete this->ringBuffer;
   }
-  // void setup(float delayTime, float feedBack, float amplitude);
+
+  float process(float sample)
+  {
+    insertSample(sample);
+    return getSample();
+  }
+
+  void setDelayTime(float delayTime)
+  {
+    this->delayTime = std::fmin(delayTime, this->maxDelayTime);
+    this->sampleOffset = this->sampleRate * this->delayTime;
+  }
+
+private:
+  int sampleRate;
+  float maxDelayTime;
+  int ringBufferSize;
+  float *ringBuffer;
+  int sampleOffset;
+  int inputIndex = 0;
   float getSample()
   {
     int samplePos = inputIndex - this->sampleOffset;
@@ -44,17 +64,4 @@ public:
     this->inputIndex += this->ringBufferSize;
     this->inputIndex %= this->ringBufferSize;
   }
-  void setDelayTime(float delayTime)
-  {
-    this->delayTime = std::fmin(delayTime, this->maxDelayTime);
-    this->sampleOffset = this->sampleRate * this->delayTime;
-  }
-
-private:
-  int sampleRate;
-  float maxDelayTime;
-  int ringBufferSize;
-  float *ringBuffer;
-  int sampleOffset;
-  int inputIndex = 0;
 };

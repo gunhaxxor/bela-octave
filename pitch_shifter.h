@@ -4,6 +4,7 @@
 #include <libraries/math_neon/math_neon.h>
 #include "sinc_interpolation.h"
 #include "utility.h"
+#include "audio_effect_interface.hpp"
 #include <cmath>
 
 #undef NDEBUG
@@ -12,7 +13,7 @@
 #include <algorithm>
 #include <assert.h>
 
-class PitchShifter
+class PitchShifter : public AudioEffect
 {
 public:
   PitchShifter(int sampleRate, float lowestTrackableFrequency,
